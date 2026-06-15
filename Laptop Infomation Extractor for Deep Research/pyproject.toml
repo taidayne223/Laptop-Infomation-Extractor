@@ -1,0 +1,9 @@
+[project]
+name = "infomation-extractor"
+version = "0.1.0"
+description = "Cross-platform laptop information extractor and cloud AI research prompt generator."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+infomation-extractor = "infomation_extractor.cli:main"
