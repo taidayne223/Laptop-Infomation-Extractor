@@ -26,6 +26,6 @@ fi
 
 echo ""
 echo "=========================================="
-echo "Hoàn thành! File prompt đã được tạo trong thư mục outputs/."
+echo "Hoàn thành! File prompt đã được tạo trong thư mục Noi luu File ket qua/."
 echo "Nhấn Enter để thoát..."
 read -r

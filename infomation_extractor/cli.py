@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     if gpu:
         system_info.setdefault("confirmed", {})["gpu"] = gpu
 
-    output_dir = ensure_dir(Path(args.output_dir) if args.output_dir else root_dir / "outputs")
+    output_dir = ensure_dir(Path(args.output_dir) if args.output_dir else root_dir / "Noi luu File ket qua")
     path = write_cloud_research_prompt(output_dir, model_name, system_info, guess)
 
     print("")
@@ -47,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.no_open:
         open_output_file(path)
+        open_containing_directory(path.parent)
 
     print("")
     print("Upload or paste this single file into ChatGPT, Gemini, Claude, or another AI with web/deep-research access.")
@@ -61,7 +62,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--model-name", help="Override the detected laptop model name.")
     parser.add_argument("--gpu", help="Override the detected GPU variant, e.g. 'NVIDIA RTX 4060 Laptop GPU'.")
     parser.add_argument("--system-info-file", help="Read system information from a text/json/xml/nfo file.")
-    parser.add_argument("--output-dir", help="Directory for generated prompt files. Defaults to outputs/.")
+    parser.add_argument("--output-dir", help="Directory for generated prompt files. Defaults to Noi luu File ket qua/.")
     parser.add_argument("--no-open", action="store_true", help="Do not open the generated prompt file.")
     parser.add_argument("--print-system-info", action="store_true", help="Print sanitized system info JSON.")
     parser.add_argument(
@@ -127,6 +128,23 @@ def open_output_file(path: Path) -> None:
         print("Opened the generated prompt file.")
     except Exception as exc:
         print(f"Could not auto-open the prompt file: {exc}")
+
+
+def open_containing_directory(path: Path) -> None:
+    try:
+        current_os = platform.system().lower()
+        if current_os == "windows":
+            try:
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            except OSError:
+                subprocess.Popen(["explorer.exe", str(path)])
+        elif current_os == "darwin":
+            subprocess.run(["open", str(path)], check=False)
+        else:
+            subprocess.run(["xdg-open", str(path)], check=False)
+        print("Opened the output folder.")
+    except Exception as exc:
+        print(f"Could not auto-open the output folder: {exc}")
 
 
 if __name__ == "__main__":

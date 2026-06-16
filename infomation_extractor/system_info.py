@@ -429,6 +429,7 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
             "memory": _first(hardware.get("physical_memory")),
             "display": _macos_display_summaries(raw.get("SPDisplaysDataType") or []),
             "battery": _macos_battery_summaries(raw.get("SPPowerDataType") or []),
+            "os": f"macOS {platform.mac_ver()[0]}" if platform.mac_ver()[0] else "macOS",
         }
 
     return {
