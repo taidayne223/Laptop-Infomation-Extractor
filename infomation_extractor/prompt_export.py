@@ -32,9 +32,24 @@ def build_cloud_research_prompt(model_name: str, system_info: dict[str, Any], gu
 You are a senior laptop reviewer, technical researcher, and YouTube script strategist.
 Use web/deep research to identify, verify, and evaluate this exact laptop as deeply as possible.
 
-IMPORTANT LANGUAGE REQUIREMENT:
+IMPORTANT LANGUAGE REQUIREMENT & TERMINOLOGY TRANSLATION:
 - The final research report MUST be written in Vietnamese.
-- Keep common technical terms in English where natural, for example CPU, GPU, TGP, PWM, benchmark, thermal throttling, color gamut.
+- All titles, subtitles, headings, and lists must be generated in Vietnamese. Do not use English names for sections (e.g. use "Bàn phím, bàn di chuột, webcam và loa" instead of "Keyboard, Touchpad, Webcam, Speakers"; use "Cổng kết nối, khả năng nâng cấp và sửa chữa" instead of "Ports, Upgradeability, Repairability"; use "Thời lượng pin & Sạc" instead of "Battery Life & Charging", etc.).
+- Translate hardware terms, feedback adjectives, and user concerns into natural, easy-to-understand Vietnamese rather than leaving them in English jargon (except for proper names like CPU, GPU, RAM, BIOS, Windows, SSD, TGP, TDP, HDMI, USB-C, Wi-Fi, etc.). For example:
+  + "spongy/soft keyboard" -> "phím bấm hơi lún/nhão/mềm"
+  + "key travel" -> "hành trình phím"
+  + "feedback" -> "phản hồi/độ nảy phím"
+  + "clickpad/touchpad tracking" -> "độ nhạy/khả năng tracking của bàn rê"
+  + "palm rejection" -> "khả năng chống tì đè lòng bàn tay"
+  + "upgradeability" -> "khả năng nâng cấp"
+  + "common issues" -> "các lỗi thường gặp/vấn đề phổ biến"
+  + "pros & cons" -> "Ưu điểm & Nhược điểm"
+  + "B-roll" -> "Cảnh quay phụ họa (B-roll)"
+  + "takeaways" -> "Điểm nhấn rút ra"
+  + "display deep dive" -> "Đánh giá chi tiết màn hình"
+  + "performance deep dive" -> "Đánh giá chi tiết hiệu năng"
+  + "thermal throttling" -> "giảm hiệu năng do quá nhiệt / hạ xung nhiệt"
+- For all other hardware descriptions, try to write in a clear, easy-to-understand language for non-technical users, avoiding raw English jargon.
 - Do not answer in English except for technical names, product names, benchmark names, and source titles.
 
 Do not hallucinate. Every important factual claim must have a source URL. If a fact cannot be verified, mark it as `Chưa xác minh`.
@@ -79,43 +94,43 @@ Search and use sources in this priority order:
 Your output report must be organized into the following 6 comprehensive chapters. Avoid generating tiny, fragmented sections. Write in a flowing, cohesive review style (văn phong phân tích chuyên sâu, mạch lạc, kết nối chặt chẽ giữa các ý, tránh viết rời rạc từng mục nhỏ cụt lủn).
 
 # CHƯƠNG 1: TỔNG QUAN & NHẬN DIỆN MẪU MÁY CHÍNH XÁC
-1. Tóm tắt đánh giá (Executive Summary):
+1. Tóm tắt đánh giá cốt lõi:
    - Đánh giá tổng quan về laptop trong 1-2 đoạn văn mạch lạc, nêu rõ định vị thị trường, đối tượng nên mua và đối tượng nên tránh.
-   - 5 điểm mấu chốt quan trọng nhất (takeaways) phục vụ cho kịch bản review.
+   - 5 điểm nhấn quan trọng rút ra phục vụ cho kịch bản review.
 2. Xác nhận & Nhận diện phiên bản:
    - Tên thương mại chính thức, SKU khu vực.
-   - Đối chiếu bằng chứng từ hệ thống cục bộ (local info) so với thông tin trực tuyến để tăng độ tin cậy.
+   - Đối chiếu bằng chứng từ hệ thống cục bộ so với thông tin trực tuyến để tăng độ tin cậy.
    - Những chi tiết cấu hình còn mơ hồ cần kiểm tra thực tế thêm trên máy.
-3. Bảng thông số kỹ thuật đầy đủ (Full Specification Table):
+3. Bảng thông số kỹ thuật đầy đủ:
    - Tạo bảng Markdown sạch sẽ gồm: CPU, GPU (kèm điện năng giới hạn/TGP nếu có), RAM (loại, tốc độ, dung lượng, khả năng nâng cấp), Ổ cứng (model, chuẩn kết nối, khe cắm nâng cấp), Màn hình (kích thước, độ phân giải, loại panel, tần số quét, độ sáng, độ bao phủ màu, PWM), Dung lượng pin & Công suất bộ sạc, Cân nặng & Kích thước, Cổng kết nối, Wi-Fi/Bluetooth, Webcam/Mic/Loa, Bàn phím/Touchpad, Hệ điều hành kèm phần mềm đi kèm.
 
 # CHƯƠNG 2: THIẾT KẾ, PHẦN CỨNG VÀ TRẢI NGHIỆM VẬT LÝ VẬN HÀNH
-1. Thiết kế & Độ hoàn thiện (Design & Build):
+1. Thiết kế & Chất lượng hoàn thiện:
    - Phân tích chi tiết vật liệu chế tạo, độ cứng cáp của khung sườn, độ linh hoạt của bản lề, độ võng (flex) của nắp máy và bệ phím.
-   - Tính cơ động, thiết kế thẩm mỹ và gợi ý các góc quay B-roll ấn tượng.
-2. Trải nghiệm nhập liệu và Ngoại vi (Keyboard, Touchpad, Webcam, Speakers):
-   - Cảm giác gõ phím thực tế, độ nhạy touchpad.
+   - Tính cơ động, thiết kế thẩm mỹ và gợi ý các cảnh quay phụ họa (B-roll) ấn tượng.
+2. Trải nghiệm nhập liệu và Ngoại vi (Bàn phím, Bàn di chuột, Webcam, Loa):
+   - Cảm giác gõ phím thực tế (hành trình phím, độ nảy, tiếng ồn), độ nhạy của bàn di chuột (touchpad/clickpad).
    - Chất lượng webcam (độ phân giải/hình ảnh), microphone và hệ thống loa.
-3. Cổng kết nối & Khả năng nâng cấp, sửa chữa (Ports & Upgradeability):
+3. Cổng kết nối & Khả năng nâng cấp, sửa chữa:
    - Sơ đồ bố trí các cổng kết nối.
    - Khả năng nâng cấp RAM (hàn chết hay có khe cắm), số khe cắm SSD, loại card Wi-Fi.
    - Cách tháo nắp đáy và nhận định sơ bộ về độ phức tạp của hệ thống tản nhiệt/linh kiện bên trong.
 
 # CHƯƠNG 3: MÀN HÌNH & HIỆU NĂNG CHUYÊN SÂU
-1. Phân tích màn hình chuyên sâu (Display Deep Dive):
-   - Phân tích chi tiết độ phân giải, tỷ lệ khung hình, tần số quét, độ sáng thực tế, độ phủ màu (sRGB, DCI-P3, AdobeRGB), độ tương phản, thời gian phản hồi và sự hiện diện của PWM/flicker.
+1. Phân tích màn hình chuyên sâu:
+   - Phân tích chi tiết độ phân giải, tỷ lệ khung hình, tần số quét, độ sáng thực tế, độ phủ màu (sRGB, DCI-P3, AdobeRGB), độ tương phản, thời gian phản hồi và sự hiện diện của hiện tượng nhấp nháy màn hình (PWM/flicker).
    - Đánh giá mức độ phù hợp cho từng tác vụ: văn phòng, học tập, lập trình, thiết kế đồ họa, dựng video, chơi game.
-   - Ưu/nhược điểm của màn hình và các lưu ý khi test màn hình thực tế.
-2. Hiệu năng & Tản nhiệt chuyên sâu (Performance & Thermals):
+   - Ưu điểm và Nhược điểm của màn hình và các lưu ý khi kiểm tra màn hình thực tế.
+2. Hiệu năng & Tản nhiệt chuyên sâu:
    - Đánh giá hiệu năng CPU và GPU trong các tác vụ văn phòng và đồ họa nặng/chơi game.
-   - Điện năng tiêu thụ thực tế (TDP/TGP), hiện tượng giảm hiệu năng do nhiệt (thermal throttling), tiếng ồn quạt và các chế độ điều phối năng lượng (power modes).
-   - Tổng hợp kết quả benchmark thực tế từ các nguồn đánh giá uy tín (Notebookcheck, UltrabookReview, v.v.), bắt buộc đính kèm URL nguồn. Gợi ý các bài test hiệu năng mà reviewer nên tự thực hiện trên máy.
+   - Điện năng tiêu thụ thực tế (TDP/TGP), hiện tượng giảm hiệu năng do quá nhiệt (thermal throttling), tiếng ồn quạt và các chế độ điều phối năng lượng.
+   - Tổng hợp kết quả chấm điểm hiệu năng (benchmark) thực tế từ các nguồn đánh giá uy tín (Notebookcheck, UltrabookReview, v.v.), bắt buộc đính kèm URL nguồn Gợi ý các bài test hiệu năng mà reviewer nên tự thực hiện trên máy.
 
-# CHƯƠNG 4: PIN & ĐÁNH GIÁ THỰC TẾ TỪ NGƯỜI DÙNG CỘNG ĐỒNG
-1. Thời lượng Pin & Công nghệ sạc (Battery & Charging):
+# CHƯƠNG 4: PIN & ĐÁNH GIÁ THỰC TẾ TỪ CỘNG ĐỒNG
+1. Thời lượng Pin & Công nghệ sạc:
    - Dung lượng pin, kết quả test thực tế từ các bài đánh giá uy tín dưới các kịch bản sử dụng khác nhau (lướt web, xem video, làm việc nặng).
    - Tốc độ sạc, các yếu tố ảnh hưởng trực tiếp đến thời lượng pin thực tế.
-2. Lỗi vặt và Phản hồi từ cộng đồng (Common Issues & Owner Complaints):
+2. Lỗi vặt và Phản hồi từ cộng đồng:
    - Tổng hợp các lỗi hoặc phàn nàn phổ biến từ người dùng trên Reddit, diễn đàn công nghệ về Driver, BIOS, màn hình xanh, quạt kêu to, sụt pin nhanh hoặc quá nhiệt.
    - Đánh giá mức độ nghiêm trọng và độ tin cậy của các phản hồi này.
 
@@ -123,22 +138,22 @@ Your output report must be organized into the following 6 comprehensive chapters
 1. Bảng so sánh 5-8 đối thủ cùng phân khúc:
    - Lập bảng so sánh chi tiết gồm các cột: Tên máy, CPU/GPU, Màn hình, Dung lượng pin, Trọng lượng, Khả năng nâng cấp, Giá tham khảo.
    - Phân tích rõ lý do nên chọn đối thủ thay vì máy này và ngược lại.
-2. Bảng Ưu điểm & Nhược điểm (Pros & Cons Table):
+2. Bảng Ưu điểm & Nhược điểm:
    - Tạo bảng so sánh ưu/nhược điểm đối sánh trực quan, súc tích và có tính thuyết phục cao.
-3. Tư vấn mua sắm & Định giá (Value & Buying Advice):
+3. Tư vấn mua sắm & Định giá:
    - Khoảng giá tốt/tệ để mua máy.
    - Phiên bản cấu hình tối ưu nhất nên mua và phiên bản cấu hình cần tránh.
-   - Các lưu ý khi mua máy cũ/refurbished (nếu có).
+   - Các lưu ý khi mua máy cũ hoặc hàng tân trang (refurbished) (nếu có).
 
 # CHƯƠNG 6: GÓI TÀI NGUYÊN CHO CREATOR VÀ NGUỒN THAM KHẢO
-1. YouTube Review Package:
-   - Đề xuất 10 ý tưởng tiêu đề, 10 câu giật tít hình thu nhỏ (thumbnail), 5 câu mở đầu video thu hút (opening hooks).
-   - Dàn ý kịch bản chi tiết, danh sách cảnh quay B-roll cần thực hiện.
-   - Các câu hỏi từ khán giả mà kịch bản nên trả lời trực tiếp.
-2. Infographic / Information Graphics Pack:
-   - Thiết kế sẵn nội dung dạng bảng Markdown để có thể dễ dàng sao chép và dán vào Canva/Figma/Sheets (gồm spec card, bảng so sánh hiệu năng/pin, ma trận đối thủ).
-3. Bảng Fact-Check kiểm chứng thông tin:
-   - Tạo bảng đối chiếu: Tuyên bố thông tin | URL nguồn dẫn chứng | Loại nguồn | Độ tin cậy (High/Medium/Low) | Ghi chú.
+1. Gói hỗ trợ làm video YouTube:
+   - Đề xuất 10 ý tưởng tiêu đề, 10 câu giật tít hình thu nhỏ (thumbnail), 5 câu mở đầu video thu hút (hooks).
+   - Dàn ý kịch bản chi tiết, danh sách cảnh quay phụ họa (B-roll) cần thực hiện.
+   - Các câu hỏi từ khán giả mà kịch bản nên giải đáp trực tiếp.
+2. Bộ thông tin đồ họa (Infographic):
+   - Thiết kế sẵn nội dung dạng bảng Markdown để có thể dễ dàng sao chép và dán vào Canva/Figma/Sheets (gồm thông tin cấu hình, bảng so sánh hiệu năng/pin, ma trận đối thủ).
+3. Bảng đối chiếu thông tin (Fact-Check):
+   - Tạo bảng đối chiếu: Tuyên bố thông tin | URL nguồn dẫn chứng | Loại nguồn | Độ tin cậy (Cao/Trung bình/Thấp) | Ghi chú.
 4. Danh sách nguồn tham khảo chi tiết:
    - Phân nhóm nguồn rõ ràng (Official, Professional, Store, Community, Video reviews) kèm tiêu đề bài viết và liên kết URL đầy đủ.
 
