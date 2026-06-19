@@ -76,155 +76,79 @@ Search and use sources in this priority order:
 
 ## Required Output Structure
 
-# 1. Executive Summary
-- This laptop in one paragraph.
-- Market positioning.
-- Who should buy it.
-- Who should avoid it.
-- 5 key takeaways for a YouTube review.
+Your output report must be organized into the following 6 comprehensive chapters. Avoid generating tiny, fragmented sections. Write in a flowing, cohesive review style (văn phong phân tích chuyên sâu, mạch lạc, kết nối chặt chẽ giữa các ý, tránh viết rời rạc từng mục nhỏ cụt lủn).
 
-# 2. Exact Model Identification
-- Confirmed commercial name.
-- Regional names/SKUs.
-- Local machine evidence vs online evidence.
-- Confidence level.
-- What still needs physical verification on the unit.
+# CHƯƠNG 1: TỔNG QUAN & NHẬN DIỆN MẪU MÁY CHÍNH XÁC
+1. Tóm tắt đánh giá (Executive Summary):
+   - Đánh giá tổng quan về laptop trong 1-2 đoạn văn mạch lạc, nêu rõ định vị thị trường, đối tượng nên mua và đối tượng nên tránh.
+   - 5 điểm mấu chốt quan trọng nhất (takeaways) phục vụ cho kịch bản review.
+2. Xác nhận & Nhận diện phiên bản:
+   - Tên thương mại chính thức, SKU khu vực.
+   - Đối chiếu bằng chứng từ hệ thống cục bộ (local info) so với thông tin trực tuyến để tăng độ tin cậy.
+   - Những chi tiết cấu hình còn mơ hồ cần kiểm tra thực tế thêm trên máy.
+3. Bảng thông số kỹ thuật đầy đủ (Full Specification Table):
+   - Tạo bảng Markdown sạch sẽ gồm: CPU, GPU (kèm điện năng giới hạn/TGP nếu có), RAM (loại, tốc độ, dung lượng, khả năng nâng cấp), Ổ cứng (model, chuẩn kết nối, khe cắm nâng cấp), Màn hình (kích thước, độ phân giải, loại panel, tần số quét, độ sáng, độ bao phủ màu, PWM), Dung lượng pin & Công suất bộ sạc, Cân nặng & Kích thước, Cổng kết nối, Wi-Fi/Bluetooth, Webcam/Mic/Loa, Bàn phím/Touchpad, Hệ điều hành kèm phần mềm đi kèm.
 
-# 3. Full Specification Table
-Create a clean table with:
-- CPU
-- GPU and power limit/TGP if available
-- RAM type/speed/capacity/upgradeability
-- Storage model/interface/slots
-- Display size/resolution/panel type/refresh rate/brightness/color gamut/PWM
-- Battery capacity
-- Charger wattage
-- Weight/dimensions
-- Ports
-- Wi-Fi/Bluetooth
-- Webcam/mic/speakers
-- Keyboard/touchpad
-- OS and bundled software
+# CHƯƠNG 2: THIẾT KẾ, PHẦN CỨNG VÀ TRẢI NGHIỆM VẬT LÝ VẬN HÀNH
+1. Thiết kế & Độ hoàn thiện (Design & Build):
+   - Phân tích chi tiết vật liệu chế tạo, độ cứng cáp của khung sườn, độ linh hoạt của bản lề, độ võng (flex) của nắp máy và bệ phím.
+   - Tính cơ động, thiết kế thẩm mỹ và gợi ý các góc quay B-roll ấn tượng.
+2. Trải nghiệm nhập liệu và Ngoại vi (Keyboard, Touchpad, Webcam, Speakers):
+   - Cảm giác gõ phím thực tế, độ nhạy touchpad.
+   - Chất lượng webcam (độ phân giải/hình ảnh), microphone và hệ thống loa.
+3. Cổng kết nối & Khả năng nâng cấp, sửa chữa (Ports & Upgradeability):
+   - Sơ đồ bố trí các cổng kết nối.
+   - Khả năng nâng cấp RAM (hàn chết hay có khe cắm), số khe cắm SSD, loại card Wi-Fi.
+   - Cách tháo nắp đáy và nhận định sơ bộ về độ phức tạp của hệ thống tản nhiệt/linh kiện bên trong.
 
-# 4. Design & Build Quality
-- Materials, chassis rigidity, hinge, lid flex, keyboard deck flex.
-- Portability and visual identity.
-- B-roll shots worth filming.
+# CHƯƠNG 3: MÀN HÌNH & HIỆU NĂNG CHUYÊN SÂU
+1. Phân tích màn hình chuyên sâu (Display Deep Dive):
+   - Phân tích chi tiết độ phân giải, tỷ lệ khung hình, tần số quét, độ sáng thực tế, độ phủ màu (sRGB, DCI-P3, AdobeRGB), độ tương phản, thời gian phản hồi và sự hiện diện của PWM/flicker.
+   - Đánh giá mức độ phù hợp cho từng tác vụ: văn phòng, học tập, lập trình, thiết kế đồ họa, dựng video, chơi game.
+   - Ưu/nhược điểm của màn hình và các lưu ý khi test màn hình thực tế.
+2. Hiệu năng & Tản nhiệt chuyên sâu (Performance & Thermals):
+   - Đánh giá hiệu năng CPU và GPU trong các tác vụ văn phòng và đồ họa nặng/chơi game.
+   - Điện năng tiêu thụ thực tế (TDP/TGP), hiện tượng giảm hiệu năng do nhiệt (thermal throttling), tiếng ồn quạt và các chế độ điều phối năng lượng (power modes).
+   - Tổng hợp kết quả benchmark thực tế từ các nguồn đánh giá uy tín (Notebookcheck, UltrabookReview, v.v.), bắt buộc đính kèm URL nguồn. Gợi ý các bài test hiệu năng mà reviewer nên tự thực hiện trên máy.
 
-# 5. Display Deep Dive
-- Resolution, aspect ratio, refresh rate, brightness, color coverage, contrast, response time, PWM/flicker.
-- Suitability for office, school, coding, color work, video editing, gaming.
-- Display pros/cons and testing notes.
+# CHƯƠNG 4: PIN & ĐÁNH GIÁ THỰC TẾ TỪ NGƯỜI DÙNG CỘNG ĐỒNG
+1. Thời lượng Pin & Công nghệ sạc (Battery & Charging):
+   - Dung lượng pin, kết quả test thực tế từ các bài đánh giá uy tín dưới các kịch bản sử dụng khác nhau (lướt web, xem video, làm việc nặng).
+   - Tốc độ sạc, các yếu tố ảnh hưởng trực tiếp đến thời lượng pin thực tế.
+2. Lỗi vặt và Phản hồi từ cộng đồng (Common Issues & Owner Complaints):
+   - Tổng hợp các lỗi hoặc phàn nàn phổ biến từ người dùng trên Reddit, diễn đàn công nghệ về Driver, BIOS, màn hình xanh, quạt kêu to, sụt pin nhanh hoặc quá nhiệt.
+   - Đánh giá mức độ nghiêm trọng và độ tin cậy của các phản hồi này.
 
-# 6. Performance Deep Dive
-- CPU performance.
-- GPU performance.
-- Sustained performance.
-- SSD/storage performance.
-- Thermals.
-- Fan noise.
-- Power modes.
-- Benchmarks from sources, with URLs.
-- Suggested tests I should run myself.
+# CHƯƠNG 5: SO SÁNH ĐỐI THỦ & TƯ VẤN MUA SẮM SẮC BÉN
+1. Bảng so sánh 5-8 đối thủ cùng phân khúc:
+   - Lập bảng so sánh chi tiết gồm các cột: Tên máy, CPU/GPU, Màn hình, Dung lượng pin, Trọng lượng, Khả năng nâng cấp, Giá tham khảo.
+   - Phân tích rõ lý do nên chọn đối thủ thay vì máy này và ngược lại.
+2. Bảng Ưu điểm & Nhược điểm (Pros & Cons Table):
+   - Tạo bảng so sánh ưu/nhược điểm đối sánh trực quan, súc tích và có tính thuyết phục cao.
+3. Tư vấn mua sắm & Định giá (Value & Buying Advice):
+   - Khoảng giá tốt/tệ để mua máy.
+   - Phiên bản cấu hình tối ưu nhất nên mua và phiên bản cấu hình cần tránh.
+   - Các lưu ý khi mua máy cũ/refurbished (nếu có).
 
-# 7. Battery Life & Charging
-- Battery capacity.
-- Real-world battery results from reviews.
-- Charging speed.
-- What affects runtime.
-- Practical expectation for creator/student/office use.
-
-# 8. Keyboard, Touchpad, Webcam, Speakers
-- Review observations.
-- What to test on camera.
-- Strengths and weaknesses.
-
-# 9. Ports, Upgradeability, Repairability
-- Port map.
-- RAM upgradeability.
-- SSD slots.
-- Wi-Fi card.
-- Bottom cover access.
-- Thermal system observations if available.
-
-# 10. Common Issues & Owner Complaints
-- Confirmed review complaints.
-- Owner/community complaints.
-- Driver/BIOS/thermal/fan/display/battery issues.
-- Severity and confidence rating for each issue.
-
-# 11. Pros & Cons
-Create a sharp pros/cons table. Each item must be backed by source or local evidence.
-
-# 12. Competitor Comparison
-Compare against 5-8 relevant competitors in the same class. Include:
-- Model
-- CPU/GPU
-- Display
-- Battery
-- Weight
-- Upgradeability
-- Typical price
-- Why choose it over this laptop
-- Why choose this laptop instead
-
-# 13. Value & Buying Advice
-- Good price range.
-- Bad price range.
-- Best configuration to buy.
-- Configurations to avoid.
-- Used/refurbished buying notes if relevant.
-
-# 14. YouTube Review Package
-Give me:
-- 10 title ideas.
-- 10 thumbnail text ideas.
-- 5 opening hooks.
-- Full video outline.
-- B-roll checklist.
-- Benchmarks/tests checklist.
-- Talking points for each chapter.
-- Suggested verdict.
-- Audience questions to answer in the video.
-
-# 15. Infographic / Information Graphics Pack
-Create chart-ready content:
-- Spec card layout.
-- Pros/cons visual card.
-- Performance comparison table.
-- Battery comparison table.
-- Competitor matrix.
-- Upgradeability diagram description.
-- Port map description.
-- Suggested icons and labels.
-- Data tables in Markdown that can be pasted into Canva/Figma/Sheets.
-- Short captions for each graphic.
-
-# 16. Fact Check Table
-Create a table:
-- Claim
-- Source URL
-- Source type
-- Confidence: High / Medium / Low
-- Notes
-
-# 17. Sources
-Group sources by:
-- Official
-- Professional reviews
-- Store listings
-- Community/forum
-- Video reviews
+# CHƯƠNG 6: GÓI TÀI NGUYÊN CHO CREATOR VÀ NGUỒN THAM KHẢO
+1. YouTube Review Package:
+   - Đề xuất 10 ý tưởng tiêu đề, 10 câu giật tít hình thu nhỏ (thumbnail), 5 câu mở đầu video thu hút (opening hooks).
+   - Dàn ý kịch bản chi tiết, danh sách cảnh quay B-roll cần thực hiện.
+   - Các câu hỏi từ khán giả mà kịch bản nên trả lời trực tiếp.
+2. Infographic / Information Graphics Pack:
+   - Thiết kế sẵn nội dung dạng bảng Markdown để có thể dễ dàng sao chép và dán vào Canva/Figma/Sheets (gồm spec card, bảng so sánh hiệu năng/pin, ma trận đối thủ).
+3. Bảng Fact-Check kiểm chứng thông tin:
+   - Tạo bảng đối chiếu: Tuyên bố thông tin | URL nguồn dẫn chứng | Loại nguồn | Độ tin cậy (High/Medium/Low) | Ghi chú.
+4. Danh sách nguồn tham khảo chi tiết:
+   - Phân nhóm nguồn rõ ràng (Official, Professional, Store, Community, Video reviews) kèm tiêu đề bài viết và liên kết URL đầy đủ.
 
 ## Quality Rules
 
-- Prefer exact variant data over generic model-family data.
-- Never mix results from a different GPU/CPU variant without warning.
-- If sources disagree, explain the conflict.
-- Do not invent benchmark numbers.
-- Do not invent source URLs.
-- Use clear Vietnamese explanations for normal viewers, but include enough technical depth for enthusiasts.
-- Make the output useful as both a written review brief and a YouTube production plan.
+- Bắt buộc viết dưới dạng văn phong phân tích chuyên sâu, mạch lạc, kết nối chặt chẽ giữa các ý (Cohesive narrative). Tránh liệt kê các gạch đầu dòng rời rạc mà không có phân tích đi kèm.
+- Luôn ưu tiên thông tin chính xác của đúng phiên bản (variant) phần cứng đang được quét, tránh nhầm lẫn thông số với các phiên bản khác trong cùng dòng máy.
+- Không tự bịa đặt số liệu benchmark hay URL nguồn. Nếu thông tin không thể xác minh, ghi rõ là "Chưa xác minh".
+- Cân bằng tốt giữa phân tích kỹ thuật chuyên sâu dành cho người yêu công nghệ và giải thích trực quan, dễ hiểu dành cho người dùng phổ thông.
+- Đảm bảo đầu ra có giá trị sử dụng cao như một tài liệu nghiên cứu kịch bản sản xuất video chuyên nghiệp.
 """
 
 
