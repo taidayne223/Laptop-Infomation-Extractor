@@ -1,0 +1,22 @@
+.DS_Store
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+
+# Generated laptop prompt outputs contain machine-specific data.
+Noi luu File ket qua/
+
+# Local logs and temporary files
+*.log
+*.tmp

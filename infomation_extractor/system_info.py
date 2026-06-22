@@ -74,7 +74,7 @@ def parse_system_info_file(path: Path) -> dict[str, Any]:
         summary = _summary_from_flattened(raw)
 
     info = {
-        "source": str(path),
+        "source": path.name,
         "platform": "file",
         "summary": summary,
         "raw": raw,
@@ -176,6 +176,18 @@ $items.Processor = Get-CimInstance Win32_Processor | Select-Object Name,Manufact
 $items.VideoController = Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate
 $items.PhysicalMemory = Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,ConfiguredClockSpeed,PartNumber
 $items.DiskDrive = Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,InterfaceType
+$items.NetworkAdapter = Get-CimInstance Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -or $_.NetEnabled -eq $true } | Select-Object Name,Manufacturer,AdapterType,Speed,NetConnectionID
+$items.SoundDevice = Get-CimInstance Win32_SoundDevice | Select-Object Name,Manufacturer,Status
+$items.Camera = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Class -match 'Camera|Image' -or $_.Name -match 'Camera|Webcam|IR Camera' } | Select-Object Name,Manufacturer,Status,Class
+$items.InputDevices = [ordered]@{
+  Keyboard = Get-CimInstance Win32_Keyboard | Select-Object Name,Description,NumberOfFunctionKeys
+  Pointing = Get-CimInstance Win32_PointingDevice | Select-Object Name,Manufacturer,PointingType,NumberOfButtons
+}
+$items.Security = $null
+try {
+  $items.Security = Get-Tpm | Select-Object TpmPresent,TpmReady,SpecVersion,ManufacturerVersion
+} catch {}
+$items.UsbAndThunderbolt = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'Thunderbolt|USB4|USB 4|USB 3|USB xHCI|USB Root Hub|Type-C|UCM-UCSI|USB Connector' } | Select-Object Name,Manufacturer,Status,Class
 $items.WindowsRegistryBIOS = Get-ItemProperty -Path 'HKLM:\HARDWARE\DESCRIPTION\System\BIOS' | Select-Object SystemManufacturer,SystemProductName,SystemSKU,BaseBoardProduct,BIOSVersion
 $items.WindowsRegistryCPU = Get-ItemProperty -Path 'HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0' | Select-Object ProcessorNameString,VendorIdentifier
 $items.WindowsRegistryDisplay = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\*' | Select-Object DriverDesc,ProviderName,MatchingDeviceId,HardwareInformation.AdapterString
@@ -341,7 +353,21 @@ $items | ConvertTo-Json -Depth 5
 
 
 def _collect_macos() -> dict[str, Any]:
-    raw = _run_json_command(["system_profiler", "SPHardwareDataType", "SPDisplaysDataType", "SPPowerDataType", "-json"])
+    raw = _run_json_command(
+        [
+            "system_profiler",
+            "SPHardwareDataType",
+            "SPDisplaysDataType",
+            "SPPowerDataType",
+            "SPNetworkDataType",
+            "SPBluetoothDataType",
+            "SPAudioDataType",
+            "SPCameraDataType",
+            "SPThunderboltDataType",
+            "SPUSBDataType",
+            "-json",
+        ]
+    )
     cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, check=False)
     if cpu.returncode == 0 and cpu.stdout.strip():
         raw["cpu_brand_string"] = cpu.stdout.strip()
@@ -393,6 +419,12 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
         dotnet_drives = raw.get("DotNetDrives") or []
         gpu = raw.get("VideoController") or []
         disks = raw.get("DiskDrive") or []
+        network = raw.get("NetworkAdapter") or []
+        audio = raw.get("SoundDevice") or []
+        camera = raw.get("Camera") or []
+        input_devices = raw.get("InputDevices") or {}
+        security = raw.get("Security") or {}
+        ports = raw.get("UsbAndThunderbolt") or []
         sku = _first(csp.get("SKUNumber"), csp.get("Version"), registry_bios.get("SystemSKU"))
         registry_model = _first(registry_bios.get("SystemProductName"))
         marketing_model = _marketing_model_from_sku(sku)
@@ -410,10 +442,17 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
             "cpu": _first(cpu.get("Name"), registry_cpu.get("ProcessorNameString")),
             "gpu": _unique_names(_names_from_list(gpu) + _gpu_names_from_registry(registry_display)),
             "memory": _format_bytes(_first(dotnet_memory.get("TotalPhysicalMemory"))),
+            "memory_modules": _memory_module_summaries(raw.get("PhysicalMemory")),
             "storage": _unique_names(_names_from_list(disks, key="Model") + _disk_names_from_registry(disk_enum)),
             "drives": _drive_summaries(dotnet_drives),
             "display": _display_summaries_from_edid(display_edid, windows_screens),
             "battery": _battery_summaries(battery_report, raw.get("BatteryRuntimeEstimates")),
+            "network": _network_summaries(network),
+            "audio": _device_summaries(audio),
+            "camera": _device_summaries(camera),
+            "input": _input_summaries(input_devices),
+            "security": _security_summary(security),
+            "ports_or_controllers": _device_summaries(ports),
             "os": _format_windows_os(registry_os),
         }
 
@@ -429,6 +468,13 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
             "memory": _first(hardware.get("physical_memory")),
             "display": _macos_display_summaries(raw.get("SPDisplaysDataType") or []),
             "battery": _macos_battery_summaries(raw.get("SPPowerDataType") or []),
+            "network": _macos_named_items(raw.get("SPNetworkDataType") or []),
+            "bluetooth": _macos_named_items(raw.get("SPBluetoothDataType") or []),
+            "audio": _macos_named_items(raw.get("SPAudioDataType") or []),
+            "camera": _macos_named_items(raw.get("SPCameraDataType") or []),
+            "ports_or_controllers": _macos_named_items(
+                _as_list(raw.get("SPThunderboltDataType")) + _as_list(raw.get("SPUSBDataType"))
+            ),
             "os": f"macOS {platform.mac_ver()[0]}" if platform.mac_ver()[0] else "macOS",
         }
 
@@ -454,6 +500,12 @@ def _names_from_list(value: Any, key: str = "Name") -> list[str]:
                 if name and name not in names:
                     names.append(name)
     return names
+
+
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
 
 
 def _gpu_names_from_registry(value: Any) -> list[str]:
@@ -952,10 +1004,182 @@ def _drive_summaries(value: Any) -> list[dict[str, Any]]:
                 "type": item.get("DriveType"),
                 "total": _format_bytes(item.get("TotalSize")),
                 "free": _format_bytes(item.get("AvailableFreeSpace")),
-                "label": item.get("VolumeLabel"),
+                "label": "[REDACTED]" if item.get("VolumeLabel") else None,
             }
         )
     return drives
+
+
+def _memory_module_summaries(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    modules: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        module = {
+            "manufacturer": _first(item.get("Manufacturer")),
+            "capacity": _format_bytes(item.get("Capacity")),
+            "speed": _format_speed_mhz(item.get("Speed")),
+            "configured_speed": _format_speed_mhz(item.get("ConfiguredClockSpeed")),
+            "part_number": _first(item.get("PartNumber")),
+        }
+        modules.append({key: val for key, val in module.items() if val not in (None, "", [])})
+    return modules
+
+
+def _network_summaries(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    adapters: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        adapter = {
+            "name": _first(item.get("Name"), item.get("NetConnectionID")),
+            "manufacturer": _first(item.get("Manufacturer")),
+            "type": _first(item.get("AdapterType")),
+            "speed": _format_network_speed(item.get("Speed")),
+        }
+        adapters.append({key: val for key, val in adapter.items() if val not in (None, "", [])})
+    return _dedupe_dicts(adapters)
+
+
+def _device_summaries(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    devices: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        device = {
+            "name": _first(item.get("Name"), item.get("Description"), item.get("_name")),
+            "manufacturer": _first(item.get("Manufacturer")),
+            "status": _first(item.get("Status")),
+            "class": _first(item.get("Class")),
+        }
+        devices.append({key: val for key, val in device.items() if val not in (None, "", [])})
+    return _dedupe_dicts(devices)
+
+
+def _input_summaries(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, dict):
+        return []
+    devices: list[dict[str, Any]] = []
+    for group_name, items in value.items():
+        if isinstance(items, dict):
+            items = [items]
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            device = {
+                "type": str(group_name),
+                "name": _first(item.get("Name"), item.get("Description")),
+                "manufacturer": _first(item.get("Manufacturer")),
+                "details": _first(item.get("PointingType"), item.get("NumberOfFunctionKeys"), item.get("NumberOfButtons")),
+            }
+            devices.append({key: val for key, val in device.items() if val not in (None, "", [])})
+    return _dedupe_dicts(devices)
+
+
+def _security_summary(value: Any) -> dict[str, Any]:
+    if isinstance(value, list):
+        value = value[0] if value else {}
+    if not isinstance(value, dict):
+        return {}
+    summary = {
+        "tpm_present": value.get("TpmPresent"),
+        "tpm_ready": value.get("TpmReady"),
+        "tpm_spec_version": _first(value.get("SpecVersion")),
+        "tpm_manufacturer_version": _first(value.get("ManufacturerVersion")),
+    }
+    return {key: val for key, val in summary.items() if val not in (None, "", [])}
+
+
+def _macos_named_items(value: Any, limit: int = 24) -> list[dict[str, Any]]:
+    names: list[dict[str, Any]] = []
+
+    def walk(item: Any) -> None:
+        if len(names) >= limit:
+            return
+        if isinstance(item, list):
+            for child in item:
+                walk(child)
+            return
+        if not isinstance(item, dict):
+            return
+        name = _first(
+            item.get("_name"),
+            item.get("sppci_model"),
+            item.get("spaudio_device_name"),
+            item.get("spcamera_model-id"),
+            item.get("spusb_product_id"),
+            item.get("spnetwork_interface"),
+        )
+        if name:
+            entry = {"name": name}
+            for source_key, target_key in (
+                ("spnetwork_type", "type"),
+                ("spnetwork_hardware", "hardware"),
+                ("spnetwork_interface", "interface"),
+                ("spaudio_coreaudio_device_transport", "transport"),
+                ("spusb_vendor_name", "vendor"),
+                ("spusb_speed", "speed"),
+            ):
+                cleaned = _first(item.get(source_key))
+                if cleaned:
+                    entry[target_key] = cleaned
+            names.append(entry)
+        for child in item.values():
+            if isinstance(child, (dict, list)):
+                walk(child)
+
+    walk(value)
+    return _dedupe_dicts(names)
+
+
+def _dedupe_dicts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        if not item:
+            continue
+        key = "|".join(str(item.get(part) or "") for part in sorted(item))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _format_speed_mhz(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return f"{number} MHz" if number > 0 else None
+
+
+def _format_network_speed(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    if number >= 1_000_000_000:
+        return f"{number / 1_000_000_000:g} Gbps"
+    if number >= 1_000_000:
+        return f"{number / 1_000_000:g} Mbps"
+    return f"{number} bps"
 
 
 def _format_windows_os(value: dict[str, Any]) -> str | None:

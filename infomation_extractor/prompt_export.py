@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .model_inference import ModelGuess
-from .utils import ensure_dir, now_stamp, slugify
+from .utils import ensure_dir, now_stamp, redact_sensitive, slugify, to_json
 
 
 def write_cloud_research_prompt(
@@ -26,6 +26,7 @@ def build_cloud_research_prompt(model_name: str, system_info: dict[str, Any], gu
     confirmed = system_info.get("confirmed") or {}
     gpu = confirmed.get("gpu") or ", ".join(summary.get("gpu") or []) or "Not confirmed"
     snapshot = build_clean_snapshot(system_info)
+    evidence_json = build_structured_evidence_json(system_info)
 
     return f"""# Infomation Extractor - Laptop Deep Research Prompt
 
@@ -62,6 +63,14 @@ Do not hallucinate. Every important factual claim must have a source URL. If a f
 ## Extracted Clean Specs
 
 {snapshot}
+
+## Structured Local Evidence - Sanitized JSON
+
+Use this machine-readable local evidence to verify the exact variant. It has been privacy-redacted before export. Prefer the clean specs table for quick reading, then use this JSON appendix to resolve ambiguity about RAM modules, display panel clues, battery data, network/audio/camera devices, ports/controllers, BIOS, OS build, and other local hardware evidence.
+
+```json
+{evidence_json}
+```
 
 ## Local Detection Evidence
 
@@ -188,7 +197,15 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
         ("Confirmed GPU variant", confirmed.get("gpu")),
         ("Detected GPU list", join_values(summary.get("gpu"))),
         ("RAM", summary.get("memory")),
+        ("RAM modules", summarize_dict_list(summary.get("memory_modules"))),
         ("Storage devices", join_values(summary.get("storage"))),
+        ("Network / Wi-Fi", summarize_dict_list(summary.get("network"))),
+        ("Bluetooth", summarize_dict_list(summary.get("bluetooth"))),
+        ("Audio", summarize_dict_list(summary.get("audio"))),
+        ("Camera / webcam", summarize_dict_list(summary.get("camera"))),
+        ("Input devices", summarize_dict_list(summary.get("input"))),
+        ("Security", summarize_dict(summary.get("security"))),
+        ("Ports / controllers", summarize_dict_list(summary.get("ports_or_controllers"))),
         ("Display / panel", summarize_dict_list(summary.get("display"))),
         ("Battery", summarize_dict_list(summary.get("battery"))),
         ("Operating system", summary.get("os")),
@@ -235,6 +252,21 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
             ],
         )
 
+    memory_modules = summary.get("memory_modules") or []
+    if memory_modules:
+        append_dict_table(
+            lines,
+            "Local RAM Modules",
+            memory_modules,
+            [
+                ("Manufacturer", "manufacturer"),
+                ("Capacity", "capacity"),
+                ("Speed", "speed"),
+                ("Configured speed", "configured_speed"),
+                ("Part number", "part_number"),
+            ],
+        )
+
     batteries = summary.get("battery") or []
     if batteries:
         append_dict_table(
@@ -254,6 +286,77 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 ("Charger Wattage", "charger_wattage"),
             ],
         )
+
+    for heading, key, columns in (
+        (
+            "Local Network / Wi-Fi",
+            "network",
+            [
+                ("Name", "name"),
+                ("Manufacturer", "manufacturer"),
+                ("Type", "type"),
+                ("Speed", "speed"),
+                ("Hardware", "hardware"),
+                ("Interface", "interface"),
+            ],
+        ),
+        (
+            "Local Bluetooth",
+            "bluetooth",
+            [
+                ("Name", "name"),
+                ("Type", "type"),
+                ("Hardware", "hardware"),
+                ("Interface", "interface"),
+            ],
+        ),
+        (
+            "Local Audio",
+            "audio",
+            [
+                ("Name", "name"),
+                ("Manufacturer", "manufacturer"),
+                ("Transport", "transport"),
+                ("Status", "status"),
+                ("Class", "class"),
+            ],
+        ),
+        (
+            "Local Camera / Webcam",
+            "camera",
+            [
+                ("Name", "name"),
+                ("Manufacturer", "manufacturer"),
+                ("Status", "status"),
+                ("Class", "class"),
+            ],
+        ),
+        (
+            "Local Input Devices",
+            "input",
+            [
+                ("Type", "type"),
+                ("Name", "name"),
+                ("Manufacturer", "manufacturer"),
+                ("Details", "details"),
+            ],
+        ),
+        (
+            "Local Ports / Controllers",
+            "ports_or_controllers",
+            [
+                ("Name", "name"),
+                ("Manufacturer/Vendor", "manufacturer"),
+                ("Vendor", "vendor"),
+                ("Speed", "speed"),
+                ("Status", "status"),
+                ("Class", "class"),
+            ],
+        ),
+    ):
+        rows = summary.get(key) or []
+        if rows:
+            append_dict_table(lines, heading, rows, columns)
 
     return "\n".join(lines)
 
@@ -296,6 +399,12 @@ def summarize_dict_list(value: Any) -> str:
     return "; ".join(parts)
 
 
+def summarize_dict(value: Any) -> str:
+    if not isinstance(value, dict):
+        return ""
+    return ", ".join(f"{key}: {val}" for key, val in value.items() if val not in (None, "", []))
+
+
 def join_values(value: Any) -> str:
     if isinstance(value, list):
         return ", ".join(str(item) for item in value if str(item).strip())
@@ -306,3 +415,7 @@ def join_values(value: Any) -> str:
 
 def escape_table(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ").strip()
+
+
+def build_structured_evidence_json(system_info: dict[str, Any]) -> str:
+    return to_json(redact_sensitive(system_info))
