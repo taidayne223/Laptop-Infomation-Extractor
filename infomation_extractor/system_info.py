@@ -154,7 +154,10 @@ def _parse_battery_report_xml(root: ET.Element) -> dict[str, Any]:
 
 
 def _run_json_command(command: list[str], timeout: int = 45) -> dict[str, Any]:
-    result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=timeout, check=False)
+    except subprocess.TimeoutExpired:
+        return {"error": f"Command timed out after {timeout}s: {command[0]}"}
     if result.returncode != 0:
         return {"error": result.stderr.strip() or f"Command failed: {command[0]}"}
     try:
@@ -168,17 +171,25 @@ def _collect_windows() -> dict[str, Any]:
     script = r"""
 $ErrorActionPreference = 'SilentlyContinue'
 $items = [ordered]@{}
-$items.ComputerSystem = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer,Model,SystemType,TotalPhysicalMemory
+$items.ComputerSystem = Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer,Model,SystemType,PCSystemType,PCSystemTypeEx,TotalPhysicalMemory,HypervisorPresent
 $items.ComputerSystemProduct = Get-CimInstance Win32_ComputerSystemProduct | Select-Object Vendor,Name,Version,IdentifyingNumber,UUID,SKUNumber
 $items.BaseBoard = Get-CimInstance Win32_BaseBoard | Select-Object Manufacturer,Product,Version,SerialNumber
 $items.BIOS = Get-CimInstance Win32_BIOS | Select-Object Manufacturer,SMBIOSBIOSVersion,Version,ReleaseDate,SerialNumber
-$items.Processor = Get-CimInstance Win32_Processor | Select-Object Name,Manufacturer,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed
-$items.VideoController = Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate
-$items.PhysicalMemory = Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,ConfiguredClockSpeed,PartNumber
-$items.DiskDrive = Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,InterfaceType
-$items.NetworkAdapter = Get-CimInstance Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -or $_.NetEnabled -eq $true } | Select-Object Name,Manufacturer,AdapterType,Speed,NetConnectionID
+$items.SystemEnclosure = Get-CimInstance Win32_SystemEnclosure | Select-Object Manufacturer,ChassisTypes,SMBIOSAssetTag,SerialNumber,Version
+$items.Processor = Get-CimInstance Win32_Processor | Select-Object Name,Manufacturer,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,L2CacheSize,L3CacheSize,SocketDesignation,VirtualizationFirmwareEnabled
+$items.VideoController = Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,VideoProcessor,VideoModeDescription,CurrentHorizontalResolution,CurrentVerticalResolution,CurrentRefreshRate,Status,PNPDeviceID
+$items.PhysicalMemory = Get-CimInstance Win32_PhysicalMemory | Select-Object Manufacturer,Capacity,Speed,ConfiguredClockSpeed,PartNumber,BankLabel,DeviceLocator,FormFactor,MemoryType,SMBIOSMemoryType
+$items.PhysicalMemoryArray = Get-CimInstance Win32_PhysicalMemoryArray | Select-Object MemoryDevices,MaxCapacity,MaxCapacityEx,Use
+$items.DiskDrive = Get-CimInstance Win32_DiskDrive | Select-Object Model,Size,MediaType,InterfaceType,FirmwareRevision,Partitions,Status,SerialNumber,PNPDeviceID
+try {
+  $items.PhysicalDisks = Get-PhysicalDisk | Select-Object FriendlyName,MediaType,BusType,Size,HealthStatus,OperationalStatus,FirmwareVersion,SerialNumber,SpindleSpeed
+} catch {}
+$items.NetworkAdapter = Get-CimInstance Win32_NetworkAdapter | Where-Object { $_.PhysicalAdapter -eq $true -or $_.NetEnabled -eq $true } | Select-Object Name,Manufacturer,AdapterType,Speed,NetConnectionID,ServiceName,PNPDeviceID
+$items.NetworkAdapterConfiguration = Get-CimInstance Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true } | Select-Object Description,DHCPEnabled,DNSServerSearchOrder,IPSubnet,DefaultIPGateway
 $items.SoundDevice = Get-CimInstance Win32_SoundDevice | Select-Object Name,Manufacturer,Status
 $items.Camera = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Class -match 'Camera|Image' -or $_.Name -match 'Camera|Webcam|IR Camera' } | Select-Object Name,Manufacturer,Status,Class
+$items.BiometricAndSensors = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Class -match 'Biometric|Sensor|SmartCardReader' -or $_.Name -match 'Fingerprint|IR Camera|Hello|Sensor|Accelerometer|Ambient Light' } | Select-Object Name,Manufacturer,Status,Class
+$items.PnpSignedDrivers = Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.DeviceClass -match 'DISPLAY|MEDIA|CAMERA|IMAGE|NET|BLUETOOTH|BIOMETRIC|HIDCLASS|KEYBOARD|MOUSE|USB|SYSTEM' } | Select-Object DeviceName,DeviceClass,Manufacturer,DriverProviderName,DriverVersion,HardwareID,CompatibleID,DeviceID
 $items.InputDevices = [ordered]@{
   Keyboard = Get-CimInstance Win32_Keyboard | Select-Object Name,Description,NumberOfFunctionKeys
   Pointing = Get-CimInstance Win32_PointingDevice | Select-Object Name,Manufacturer,PointingType,NumberOfButtons
@@ -187,7 +198,18 @@ $items.Security = $null
 try {
   $items.Security = Get-Tpm | Select-Object TpmPresent,TpmReady,SpecVersion,ManufacturerVersion
 } catch {}
+$items.WindowsFirmware = [ordered]@{}
+try {
+  $items.WindowsFirmware.SecureBoot = Confirm-SecureBootUEFI
+} catch {}
+try {
+  $items.WindowsFirmware.FirmwareType = (Get-ComputerInfo -Property BiosFirmwareType).BiosFirmwareType
+} catch {}
 $items.UsbAndThunderbolt = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'Thunderbolt|USB4|USB 4|USB 3|USB xHCI|USB Root Hub|Type-C|UCM-UCSI|USB Connector' } | Select-Object Name,Manufacturer,Status,Class
+$items.PowerCapabilities = $null
+try {
+  $items.PowerCapabilities = (powercfg /a | Out-String).Trim()
+} catch {}
 $items.WindowsRegistryBIOS = Get-ItemProperty -Path 'HKLM:\HARDWARE\DESCRIPTION\System\BIOS' | Select-Object SystemManufacturer,SystemProductName,SystemSKU,BaseBoardProduct,BIOSVersion
 $items.WindowsRegistryCPU = Get-ItemProperty -Path 'HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0' | Select-Object ProcessorNameString,VendorIdentifier
 $items.WindowsRegistryDisplay = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\*' | Select-Object DriverDesc,ProviderName,MatchingDeviceId,HardwareInformation.AdapterString
@@ -200,6 +222,19 @@ $items.WindowsDisplayEdid = Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\
     }
   }
 }
+$items.WindowsWmiMonitors = $null
+try {
+  $items.WindowsWmiMonitors = Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorID | ForEach-Object {
+    [ordered]@{
+      InstanceName = $_.InstanceName
+      ManufacturerName = -join ($_.ManufacturerName | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ })
+      ProductCodeID = -join ($_.ProductCodeID | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ })
+      UserFriendlyName = -join ($_.UserFriendlyName | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ })
+      SerialNumberID = -join ($_.SerialNumberID | Where-Object { $_ -ne 0 } | ForEach-Object { [char]$_ })
+      Active = $_.Active
+    }
+  }
+} catch {}
 $items.WindowsScreens = $null
 try {
   Add-Type -TypeDefinition '
@@ -289,6 +324,10 @@ try {
   }
 } catch {}
 $items.WindowsRegistryOS = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' | Select-Object ProductName,DisplayVersion,CurrentBuild,UBR,EditionID
+$items.WindowsComputerInfo = $null
+try {
+  $items.WindowsComputerInfo = Get-ComputerInfo | Select-Object WindowsProductName,WindowsVersion,OsHardwareAbstractionLayer,CsManufacturer,CsModel,CsSystemType,CsPCSystemType,CsProcessors,CsNumberOfLogicalProcessors,CsTotalPhysicalMemory,BiosName,BiosVersion,BiosReleaseDate,BiosFirmwareType
+} catch {}
 $diskEnum = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\disk\Enum'
 $cleanDiskEnum = [ordered]@{}
 foreach ($prop in $diskEnum.PSObject.Properties) {
@@ -299,6 +338,7 @@ foreach ($prop in $diskEnum.PSObject.Properties) {
 $items.WindowsRegistryDiskEnum = $cleanDiskEnum
 $items.BatteryReport = $null
 $items.BatteryRuntimeEstimates = $null
+$items.BatteryStatic = Get-CimInstance Win32_Battery | Select-Object Name,DeviceID,Manufacturer,Chemistry,DesignVoltage,EstimatedChargeRemaining,EstimatedRunTime,BatteryStatus,Status
 try {
   $batteryPath = Join-Path $env:TEMP ("infomation-extractor-battery-" + [Guid]::NewGuid().ToString() + ".xml")
   powercfg /batteryreport /output $batteryPath /xml | Out-Null
@@ -345,7 +385,7 @@ $items.DotNetDrives = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsR
     VolumeLabel = $_.VolumeLabel
   }
 }
-$items | ConvertTo-Json -Depth 5
+$items | ConvertTo-Json -Depth 7
 """
     return _run_json_command(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
@@ -365,12 +405,25 @@ def _collect_macos() -> dict[str, Any]:
             "SPCameraDataType",
             "SPThunderboltDataType",
             "SPUSBDataType",
+            "SPMemoryDataType",
+            "SPNVMeDataType",
+            "SPiBridgeDataType",
+            "SPDiagnosticsDataType",
             "-json",
-        ]
+        ],
+        timeout=120,
     )
     cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, check=False)
     if cpu.returncode == 0 and cpu.stdout.strip():
         raw["cpu_brand_string"] = cpu.stdout.strip()
+    for key, command in {
+        "hw_model": ["sysctl", "-n", "hw.model"],
+        "hw_machine": ["sysctl", "-n", "hw.machine"],
+        "hw_memsize": ["sysctl", "-n", "hw.memsize"],
+    }.items():
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode == 0 and result.stdout.strip():
+            raw[key] = result.stdout.strip()
     return raw
 
 
@@ -406,28 +459,38 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
         csp = raw.get("ComputerSystemProduct") or {}
         board = raw.get("BaseBoard") or {}
         bios = raw.get("BIOS") or {}
+        enclosure = raw.get("SystemEnclosure") or {}
         cpu = raw.get("Processor") or {}
         registry_bios = raw.get("WindowsRegistryBIOS") or {}
         registry_cpu = raw.get("WindowsRegistryCPU") or {}
         registry_display = raw.get("WindowsRegistryDisplay") or []
         display_edid = raw.get("WindowsDisplayEdid") or []
+        wmi_monitors = raw.get("WindowsWmiMonitors") or []
         windows_screens = raw.get("WindowsScreens") or []
         registry_os = raw.get("WindowsRegistryOS") or {}
+        computer_info = raw.get("WindowsComputerInfo") or {}
         disk_enum = raw.get("WindowsRegistryDiskEnum") or {}
         battery_report = raw.get("BatteryReport") or []
+        battery_static = raw.get("BatteryStatic") or []
         dotnet_memory = raw.get("DotNetMemory") or {}
         dotnet_drives = raw.get("DotNetDrives") or []
         gpu = raw.get("VideoController") or []
         disks = raw.get("DiskDrive") or []
+        physical_disks = raw.get("PhysicalDisks") or []
         network = raw.get("NetworkAdapter") or []
         audio = raw.get("SoundDevice") or []
         camera = raw.get("Camera") or []
+        biometric_and_sensors = raw.get("BiometricAndSensors") or []
         input_devices = raw.get("InputDevices") or {}
         security = raw.get("Security") or {}
+        firmware = raw.get("WindowsFirmware") or {}
         ports = raw.get("UsbAndThunderbolt") or []
         sku = _first(csp.get("SKUNumber"), csp.get("Version"), registry_bios.get("SystemSKU"))
         registry_model = _first(registry_bios.get("SystemProductName"))
         marketing_model = _marketing_model_from_sku(sku)
+        total_memory = _format_bytes(
+            _first(dotnet_memory.get("TotalPhysicalMemory"), computer_info.get("CsTotalPhysicalMemory"), cs.get("TotalPhysicalMemory"))
+        )
         return {
             "manufacturer": _normalize_manufacturer(
                 _first(csp.get("Vendor"), cs.get("Manufacturer"), registry_bios.get("SystemManufacturer"))
@@ -436,24 +499,40 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
             "marketing_model": marketing_model,
             "system_sku": sku,
             "baseboard": _first(board.get("Product"), board.get("Version"), registry_bios.get("BaseBoardProduct")),
+            "chassis": _chassis_summary(enclosure, cs),
             "bios_version": _first(
-                bios.get("SMBIOSBIOSVersion"), bios.get("Version"), registry_bios.get("BIOSVersion")
+                bios.get("SMBIOSBIOSVersion"),
+                bios.get("Version"),
+                registry_bios.get("BIOSVersion"),
+                computer_info.get("BiosVersion"),
             ),
-            "cpu": _first(cpu.get("Name"), registry_cpu.get("ProcessorNameString")),
+            "firmware": _firmware_summary(firmware, computer_info),
+            "cpu": _cpu_summary(cpu, registry_cpu, computer_info),
             "gpu": _unique_names(_names_from_list(gpu) + _gpu_names_from_registry(registry_display)),
-            "memory": _format_bytes(_first(dotnet_memory.get("TotalPhysicalMemory"))),
+            "gpu_details": _gpu_summaries(gpu, registry_display, raw.get("PnpSignedDrivers")),
+            "memory": total_memory,
             "memory_modules": _memory_module_summaries(raw.get("PhysicalMemory")),
-            "storage": _unique_names(_names_from_list(disks, key="Model") + _disk_names_from_registry(disk_enum)),
+            "memory_layout": _memory_layout_summary(raw.get("PhysicalMemoryArray"), raw.get("PhysicalMemory"), total_memory),
+            "storage": _unique_names(
+                _names_from_list(disks, key="Model")
+                + _names_from_list(physical_disks, key="FriendlyName")
+                + _disk_names_from_registry(disk_enum)
+            ),
+            "storage_details": _storage_summaries(disks, physical_disks),
             "drives": _drive_summaries(dotnet_drives),
-            "display": _display_summaries_from_edid(display_edid, windows_screens),
-            "battery": _battery_summaries(battery_report, raw.get("BatteryRuntimeEstimates")),
+            "display": _display_summaries_from_edid(display_edid, windows_screens, wmi_monitors),
+            "battery": _battery_summaries(battery_report, raw.get("BatteryRuntimeEstimates"), battery_static),
             "network": _network_summaries(network),
             "audio": _device_summaries(audio),
             "camera": _device_summaries(camera),
             "input": _input_summaries(input_devices),
-            "security": _security_summary(security),
+            "security": _security_summary(security, firmware),
             "ports_or_controllers": _device_summaries(ports),
-            "os": _format_windows_os(registry_os),
+            "biometric_or_sensors": _device_summaries(biometric_and_sensors),
+            "device_drivers": _driver_summaries(raw.get("PnpSignedDrivers")),
+            "power_capabilities": _power_capability_summary(raw.get("PowerCapabilities")),
+            "local_evidence_crosscheck": _windows_evidence_crosscheck(raw),
+            "os": _format_windows_os(registry_os, computer_info),
         }
 
     if os_name.lower() == "darwin":
@@ -462,10 +541,13 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
         return {
             "manufacturer": "Apple",
             "system_model": _first(hardware.get("machine_name"), hardware.get("model_name")),
-            "system_sku": _first(hardware.get("machine_model")),
+            "system_sku": _first(hardware.get("machine_model"), raw.get("hw_model"), raw.get("hw_machine")),
             "cpu": _first(hardware.get("chip_type"), raw.get("cpu_brand_string")),
             "gpu": _macos_gpu_names(raw.get("SPDisplaysDataType") or []),
-            "memory": _first(hardware.get("physical_memory")),
+            "memory": _first(hardware.get("physical_memory"), _format_bytes(raw.get("hw_memsize"))),
+            "memory_modules": _macos_memory_summaries(raw.get("SPMemoryDataType") or []),
+            "storage": _macos_storage_names([], raw.get("SPNVMeDataType") or []),
+            "storage_details": _macos_storage_summaries([], raw.get("SPNVMeDataType") or []),
             "display": _macos_display_summaries(raw.get("SPDisplaysDataType") or []),
             "battery": _macos_battery_summaries(raw.get("SPPowerDataType") or []),
             "network": _macos_named_items(raw.get("SPNetworkDataType") or []),
@@ -475,6 +557,7 @@ def _build_summary(raw: dict[str, Any], os_name: str) -> dict[str, Any]:
             "ports_or_controllers": _macos_named_items(
                 _as_list(raw.get("SPThunderboltDataType")) + _as_list(raw.get("SPUSBDataType"))
             ),
+            "local_evidence_crosscheck": _macos_evidence_crosscheck(raw),
             "os": f"macOS {platform.mac_ver()[0]}" if platform.mac_ver()[0] else "macOS",
         }
 
@@ -546,13 +629,251 @@ def _macos_gpu_names(value: Any) -> list[str]:
     return names
 
 
-def _display_summaries_from_edid(edid_items: Any, screen_items: Any) -> list[dict[str, Any]]:
+def _cpu_summary(cpu: Any, registry_cpu: Any, computer_info: Any) -> str | None:
+    if isinstance(cpu, list):
+        cpu = cpu[0] if cpu else {}
+    if not isinstance(cpu, dict):
+        cpu = {}
+    if not isinstance(registry_cpu, dict):
+        registry_cpu = {}
+    if not isinstance(computer_info, dict):
+        computer_info = {}
+    name = _first(cpu.get("Name"), registry_cpu.get("ProcessorNameString"))
+    if not name:
+        processors = computer_info.get("CsProcessors")
+        if isinstance(processors, list) and processors:
+            first = processors[0]
+            if isinstance(first, dict):
+                name = _first(first.get("Name"))
+    details = []
+    cores = _first(cpu.get("NumberOfCores"))
+    threads = _first(cpu.get("NumberOfLogicalProcessors"), computer_info.get("CsNumberOfLogicalProcessors"))
+    max_clock = _format_speed_mhz(cpu.get("MaxClockSpeed"))
+    if cores and threads:
+        details.append(f"{cores} cores / {threads} threads")
+    if max_clock:
+        details.append(f"max {max_clock}")
+    if details and name:
+        return f"{name} ({', '.join(details)})"
+    return name
+
+
+def _chassis_summary(enclosure: Any, computer_system: Any) -> str | None:
+    if isinstance(enclosure, list):
+        enclosure = enclosure[0] if enclosure else {}
+    if not isinstance(enclosure, dict):
+        enclosure = {}
+    if not isinstance(computer_system, dict):
+        computer_system = {}
+
+    chassis_types = enclosure.get("ChassisTypes")
+    if not isinstance(chassis_types, list):
+        chassis_types = [chassis_types] if chassis_types is not None else []
+    names = [_chassis_type_name(value) for value in chassis_types]
+    names = [name for name in names if name]
+    system_type = _first(computer_system.get("SystemType"))
+    pc_type = _pc_system_type_name(computer_system.get("PCSystemTypeEx") or computer_system.get("PCSystemType"))
+    pieces = names + [piece for piece in (pc_type, system_type) if piece]
+    return ", ".join(_unique_names(pieces)) if pieces else None
+
+
+def _chassis_type_name(value: Any) -> str | None:
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return _first(value)
+    names = {
+        8: "Portable",
+        9: "Laptop",
+        10: "Notebook",
+        14: "Sub-notebook",
+        30: "Tablet",
+        31: "Convertible",
+        32: "Detachable",
+    }
+    return names.get(code, f"Chassis type {code}")
+
+
+def _pc_system_type_name(value: Any) -> str | None:
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return _first(value)
+    names = {
+        1: "Desktop",
+        2: "Mobile",
+        3: "Workstation",
+        4: "Enterprise server",
+        5: "SOHO server",
+        6: "Appliance PC",
+        7: "Performance server",
+        8: "Slate",
+        9: "Maximum",
+    }
+    return names.get(code, f"PC system type {code}")
+
+
+def _firmware_summary(firmware: Any, computer_info: Any) -> str | None:
+    if not isinstance(firmware, dict):
+        firmware = {}
+    if not isinstance(computer_info, dict):
+        computer_info = {}
+    pieces = []
+    firmware_type = _first(firmware.get("FirmwareType"), computer_info.get("BiosFirmwareType"))
+    secure_boot = firmware.get("SecureBoot")
+    if firmware_type:
+        pieces.append(str(firmware_type))
+    if secure_boot is not None:
+        pieces.append(f"Secure Boot {'enabled' if bool(secure_boot) else 'disabled'}")
+    return ", ".join(pieces) if pieces else None
+
+
+def _gpu_summaries(video: Any, registry_display: Any, drivers: Any) -> list[dict[str, Any]]:
+    if isinstance(video, dict):
+        video = [video]
+    if not isinstance(video, list):
+        video = []
+    driver_lookup = _driver_lookup(drivers)
+    gpus: list[dict[str, Any]] = []
+    for item in video:
+        if not isinstance(item, dict):
+            continue
+        name = _first(item.get("Name"), item.get("VideoProcessor"))
+        driver = _first(item.get("DriverVersion"))
+        matched = _find_driver_for_name(driver_lookup, name)
+        gpu = {
+            "name": name,
+            "video_processor": _first(item.get("VideoProcessor")),
+            "adapter_ram": _format_bytes(item.get("AdapterRAM")),
+            "driver_version": driver or (matched or {}).get("driver_version"),
+            "current_resolution": _format_resolution(
+                item.get("CurrentHorizontalResolution"), item.get("CurrentVerticalResolution")
+            ),
+            "refresh": _format_hz(item.get("CurrentRefreshRate")),
+            "status": _first(item.get("Status")),
+            "hardware_ids": _first((matched or {}).get("hardware_ids")),
+        }
+        gpus.append({key: val for key, val in gpu.items() if val not in (None, "", [])})
+
+    for name in _gpu_names_from_registry(registry_display):
+        if not any((gpu.get("name") or "").lower() == name.lower() for gpu in gpus):
+            gpus.append({"name": name, "source": "Windows display registry"})
+    return _dedupe_dicts(gpus)
+
+
+def _storage_summaries(disk_drives: Any, physical_disks: Any) -> list[dict[str, Any]]:
+    if isinstance(disk_drives, dict):
+        disk_drives = [disk_drives]
+    if isinstance(physical_disks, dict):
+        physical_disks = [physical_disks]
+    disk_drives = disk_drives if isinstance(disk_drives, list) else []
+    physical_disks = physical_disks if isinstance(physical_disks, list) else []
+
+    details: list[dict[str, Any]] = []
+    matched_physical: set[int] = set()
+    for drive in disk_drives:
+        if not isinstance(drive, dict):
+            continue
+        model = _first(drive.get("Model"))
+        match_index = _find_physical_disk_index(model, physical_disks, matched_physical)
+        physical = physical_disks[match_index] if match_index is not None else {}
+        if match_index is not None:
+            matched_physical.add(match_index)
+        detail = {
+            "model": model or _first(physical.get("FriendlyName")),
+            "size": _format_bytes(_first(drive.get("Size"), physical.get("Size"))),
+            "media_type": _first(physical.get("MediaType"), drive.get("MediaType")),
+            "bus_type": _first(physical.get("BusType"), drive.get("InterfaceType")),
+            "firmware": _first(drive.get("FirmwareRevision"), physical.get("FirmwareVersion")),
+            "partitions": _first(drive.get("Partitions")),
+            "health": _first(physical.get("HealthStatus"), drive.get("Status")),
+            "status": _first(physical.get("OperationalStatus"), drive.get("Status")),
+            "spindle_speed": _first(physical.get("SpindleSpeed")),
+        }
+        details.append({key: val for key, val in detail.items() if val not in (None, "", [])})
+
+    for index, physical in enumerate(physical_disks):
+        if index in matched_physical or not isinstance(physical, dict):
+            continue
+        detail = {
+            "model": _first(physical.get("FriendlyName")),
+            "size": _format_bytes(physical.get("Size")),
+            "media_type": _first(physical.get("MediaType")),
+            "bus_type": _first(physical.get("BusType")),
+            "firmware": _first(physical.get("FirmwareVersion")),
+            "health": _first(physical.get("HealthStatus")),
+            "status": _first(physical.get("OperationalStatus")),
+        }
+        details.append({key: val for key, val in detail.items() if val not in (None, "", [])})
+    return _dedupe_dicts(details)
+
+
+def _find_physical_disk_index(model: str | None, physical_disks: list[Any], used: set[int]) -> int | None:
+    if not model:
+        return None
+    normalized = _normalize_device_name(model)
+    for index, item in enumerate(physical_disks):
+        if index in used or not isinstance(item, dict):
+            continue
+        friendly = _normalize_device_name(_first(item.get("FriendlyName")) or "")
+        if friendly and (friendly in normalized or normalized in friendly):
+            return index
+    return None
+
+
+def _memory_layout_summary(memory_arrays: Any, modules: Any, total_memory: Any = None) -> str | None:
+    if isinstance(memory_arrays, dict):
+        memory_arrays = [memory_arrays]
+    if isinstance(modules, dict):
+        modules = [modules]
+    arrays = memory_arrays if isinstance(memory_arrays, list) else []
+    module_list = modules if isinstance(modules, list) else []
+    populated = len([module for module in module_list if isinstance(module, dict) and _first(module.get("Capacity"))])
+    slots = None
+    max_capacity = None
+    for item in arrays:
+        if not isinstance(item, dict):
+            continue
+        slots = slots or _first(item.get("MemoryDevices"))
+        max_capacity = max_capacity or _memory_array_max_capacity(item)
+    pieces = []
+    if populated and slots:
+        pieces.append(f"{populated}/{slots} slots populated")
+    elif populated:
+        pieces.append(f"{populated} module(s) detected")
+    if total_memory:
+        pieces.append(f"total {total_memory}")
+    if max_capacity:
+        pieces.append(f"reported max {max_capacity}")
+    return ", ".join(pieces) if pieces else None
+
+
+def _memory_array_max_capacity(item: dict[str, Any]) -> str | None:
+    max_ex = item.get("MaxCapacityEx")
+    try:
+        max_ex_kb = int(max_ex)
+        if max_ex_kb > 0:
+            return _format_bytes(max_ex_kb * 1024)
+    except (TypeError, ValueError):
+        pass
+    try:
+        max_kb = int(item.get("MaxCapacity"))
+    except (TypeError, ValueError):
+        return None
+    return _format_bytes(max_kb * 1024) if max_kb > 0 else None
+
+
+def _display_summaries_from_edid(edid_items: Any, screen_items: Any, monitor_items: Any = None) -> list[dict[str, Any]]:
     if isinstance(edid_items, dict):
         edid_items = [edid_items]
     if isinstance(screen_items, dict):
         screen_items = [screen_items]
     if not isinstance(screen_items, list):
         screen_items = []
+    if isinstance(monitor_items, dict):
+        monitor_items = [monitor_items]
+    if not isinstance(monitor_items, list):
+        monitor_items = []
 
     displays: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -568,6 +889,46 @@ def _display_summaries_from_edid(edid_items: Any, screen_items: Any) -> list[dic
                 continue
             seen.add(key)
             displays.append(parsed)
+
+    for monitor in monitor_items:
+        if not isinstance(monitor, dict):
+            continue
+        name = _first(monitor.get("UserFriendlyName"), monitor.get("ProductCodeID"), monitor.get("ManufacturerName"))
+        manufacturer_id = _first(monitor.get("ManufacturerName"))
+        product_code = _first(monitor.get("ProductCodeID"))
+        if not name and not manufacturer_id and not product_code:
+            continue
+        key = "|".join(str(part or "") for part in (manufacturer_id, product_code, name))
+        matching = next(
+            (
+                display
+                for display in displays
+                if str(display.get("manufacturer_id") or "").upper() == str(manufacturer_id or "").upper()
+                and (
+                    str(display.get("name") or "").upper() == str(name or "").upper()
+                    or str(display.get("registry_hint") or "").upper() == str(product_code or "").upper()
+                    or str(display.get("product_code") or "").upper() == str(product_code or "").upper()
+                )
+            ),
+            None,
+        )
+        if matching:
+            matching.setdefault("wmi_name", name)
+            matching.setdefault("wmi_product_code", product_code)
+            if "active" not in matching and monitor.get("Active") is not None:
+                matching["active"] = bool(monitor.get("Active"))
+            continue
+        if key in seen:
+            continue
+        seen.add(key)
+        display = {
+            "name": name,
+            "manufacturer_id": manufacturer_id,
+            "product_code": product_code,
+            "active": bool(monitor.get("Active")) if monitor.get("Active") is not None else None,
+            "source": "WMI monitor ID",
+        }
+        displays.append({k: v for k, v in display.items() if v not in (None, "", [])})
 
     def _get_monitor_model(monitor_id: str | None) -> str | None:
         if not monitor_id:
@@ -782,22 +1143,32 @@ def _format_resolution(width: Any, height: Any) -> str | None:
         return None
 
 
-def _battery_summaries(value: Any, estimates: Any = None) -> list[dict[str, Any]]:
+def _battery_summaries(value: Any, estimates: Any = None, static_battery: Any = None) -> list[dict[str, Any]]:
     if isinstance(value, dict):
         value = [value]
     if not isinstance(value, list):
-        return []
+        value = []
+    if isinstance(static_battery, dict):
+        static_battery = [static_battery]
+    if not isinstance(static_battery, list):
+        static_battery = []
     batteries: list[dict[str, Any]] = []
+    static_items = [item for item in static_battery if isinstance(item, dict)]
     for item in value:
         if not isinstance(item, dict):
             continue
+        static = static_items[0] if static_items else {}
         battery_data = {
-            "id": item.get("Id"),
-            "manufacturer": item.get("Manufacturer"),
-            "chemistry": item.get("Chemistry"),
+            "id": _first(item.get("Id"), static.get("Name")),
+            "manufacturer": _first(item.get("Manufacturer"), static.get("Manufacturer")),
+            "chemistry": _first(item.get("Chemistry"), _battery_chemistry_name(static.get("Chemistry"))),
             "design_capacity": _format_mwh(item.get("DesignCapacity")),
             "full_charge_capacity": _format_mwh(item.get("FullChargeCapacity")),
             "cycle_count": _first(item.get("CycleCount")),
+            "design_voltage": _format_millivolts(static.get("DesignVoltage")),
+            "charge_remaining": _format_percent(static.get("EstimatedChargeRemaining")),
+            "status": _first(static.get("Status")),
+            "battery_status": _battery_status_name(static.get("BatteryStatus")),
         }
         if estimates and isinstance(estimates, dict):
             design_active = _parse_battery_duration(estimates.get("DesignActive"))
@@ -807,6 +1178,19 @@ def _battery_summaries(value: Any, estimates: Any = None) -> list[dict[str, Any]
             if full_active:
                 battery_data["estimated_active_runtime_full_charge"] = full_active
         batteries.append(battery_data)
+    if not batteries:
+        for static in static_items:
+            battery_data = {
+                "id": _first(static.get("Name")),
+                "manufacturer": _first(static.get("Manufacturer")),
+                "chemistry": _battery_chemistry_name(static.get("Chemistry")),
+                "design_voltage": _format_millivolts(static.get("DesignVoltage")),
+                "charge_remaining": _format_percent(static.get("EstimatedChargeRemaining")),
+                "estimated_runtime": _format_minutes(static.get("EstimatedRunTime")),
+                "status": _first(static.get("Status")),
+                "battery_status": _battery_status_name(static.get("BatteryStatus")),
+            }
+            batteries.append(battery_data)
     return [{key: val for key, val in battery.items() if val not in (None, "", [])} for battery in batteries]
 
 
@@ -918,15 +1302,22 @@ def _macos_battery_summaries(value: Any) -> list[dict[str, Any]]:
                 items_to_process.extend(current["_items"])
             
             name = current.get("_name")
-            if name == "sppower_battery_information":
+            if name in {"sppower_battery_information", "spbattery_information"}:
+                model_info = current.get("sppower_battery_model_info") if isinstance(current.get("sppower_battery_model_info"), dict) else {}
+                health_info = current.get("sppower_battery_health_info") if isinstance(current.get("sppower_battery_health_info"), dict) else {}
+                charge_info = current.get("sppower_battery_charge_info") if isinstance(current.get("sppower_battery_charge_info"), dict) else {}
                 battery_data = {
-                    "id": current.get("sppower_device_name"),
-                    "manufacturer": current.get("sppower_battery_manufacturer") or current.get("sppower_device_name"),
+                    "id": current.get("sppower_device_name") or model_info.get("sppower_battery_device_name"),
+                    "manufacturer": current.get("sppower_battery_manufacturer") or current.get("sppower_device_name") or model_info.get("sppower_battery_device_name"),
                     "chemistry": current.get("sppower_battery_chemistry"),
                     "design_capacity": current.get("sppower_design_capacity") or current.get("sppower_battery_design_capacity"),
                     "full_charge_capacity": current.get("sppower_max_capacity") or current.get("sppower_battery_max_capacity"),
-                    "cycle_count": current.get("sppower_cycle_count"),
-                    "health": current.get("sppower_battery_health") or current.get("sppower_battery_health_info", {}).get("sppower_battery_health"),
+                    "cycle_count": current.get("sppower_cycle_count") or health_info.get("sppower_battery_cycle_count"),
+                    "health": current.get("sppower_battery_health") or health_info.get("sppower_battery_health"),
+                    "maximum_capacity": health_info.get("sppower_battery_health_maximum_capacity"),
+                    "charge_remaining": _format_percent(charge_info.get("sppower_battery_state_of_charge")),
+                    "charging": charge_info.get("sppower_battery_is_charging"),
+                    "fully_charged": charge_info.get("sppower_battery_fully_charged"),
                 }
                 
                 for cap_key in ("design_capacity", "full_charge_capacity"):
@@ -957,6 +1348,71 @@ def _macos_battery_summaries(value: Any) -> list[dict[str, Any]]:
         return [summary] if summary else []
         
     return batteries
+
+
+def _macos_memory_summaries(value: Any) -> list[dict[str, Any]]:
+    modules: list[dict[str, Any]] = []
+
+    def walk(item: Any) -> None:
+        if isinstance(item, list):
+            for child in item:
+                walk(child)
+            return
+        if not isinstance(item, dict):
+            return
+        candidate = {
+            "slot": _first(item.get("_name"), item.get("dimm_name"), item.get("spmemory_bank_locator")),
+            "capacity": _first(item.get("dimm_size"), item.get("spmemory_size")),
+            "speed": _first(item.get("dimm_speed"), item.get("spmemory_speed")),
+            "memory_type": _first(item.get("dimm_type"), item.get("spmemory_type")),
+            "manufacturer": _first(item.get("dimm_manufacturer"), item.get("spmemory_manufacturer")),
+            "part_number": _first(item.get("dimm_part_number"), item.get("spmemory_part_number")),
+        }
+        if any(candidate.values()):
+            modules.append({key: val for key, val in candidate.items() if val not in (None, "", [])})
+        for child in item.values():
+            if isinstance(child, (dict, list)):
+                walk(child)
+
+    walk(value)
+    return _dedupe_dicts(modules)
+
+
+def _macos_storage_names(storage: Any, nvme: Any) -> list[str]:
+    return _unique_names([item.get("model") or item.get("name") or "" for item in _macos_storage_summaries(storage, nvme)])
+
+
+def _macos_storage_summaries(storage: Any, nvme: Any) -> list[dict[str, Any]]:
+    devices: list[dict[str, Any]] = []
+
+    def walk(item: Any, source: str) -> None:
+        if isinstance(item, list):
+            for child in item:
+                walk(child, source)
+            return
+        if not isinstance(item, dict):
+            return
+        candidate = {
+            "name": _first(item.get("_name"), item.get("spstorage_volume_name")),
+            "model": _first(item.get("sppci_model"), item.get("device_model"), item.get("spnvme_model")),
+            "size": _first(item.get("size"), item.get("spstorage_physical_drive_media_size"), item.get("spnvme_capacity")),
+            "media_type": _first(item.get("medium_type"), item.get("spstorage_medium_type"), item.get("spstorage_physical_drive_media_name")),
+            "protocol": _first(item.get("protocol"), item.get("spnvme_link_width")),
+            "file_system": _first(item.get("file_system"), item.get("spstorage_file_system")),
+            "free": _first(item.get("free_space_in_bytes"), item.get("spstorage_free_space")),
+            "source": source,
+        }
+        if any(value for key, value in candidate.items() if key != "source"):
+            devices.append({key: val for key, val in candidate.items() if val not in (None, "", [])})
+        for key, child in item.items():
+            if source == "system_profiler NVMe" and key == "volumes":
+                continue
+            if isinstance(child, (dict, list)):
+                walk(child, source)
+
+    walk(storage, "system_profiler storage")
+    walk(nvme, "system_profiler NVMe")
+    return _dedupe_dicts(devices)
 
 
 def _append_clean_name(names: list[str], value: Any) -> None:
@@ -1025,6 +1481,9 @@ def _memory_module_summaries(value: Any) -> list[dict[str, Any]]:
             "speed": _format_speed_mhz(item.get("Speed")),
             "configured_speed": _format_speed_mhz(item.get("ConfiguredClockSpeed")),
             "part_number": _first(item.get("PartNumber")),
+            "slot": _first(item.get("DeviceLocator"), item.get("BankLabel")),
+            "form_factor": _memory_form_factor_name(item.get("FormFactor")),
+            "memory_type": _memory_type_name(item.get("SMBIOSMemoryType"), item.get("MemoryType")),
         }
         modules.append({key: val for key, val in module.items() if val not in (None, "", [])})
     return modules
@@ -1044,6 +1503,7 @@ def _network_summaries(value: Any) -> list[dict[str, Any]]:
             "manufacturer": _first(item.get("Manufacturer")),
             "type": _first(item.get("AdapterType")),
             "speed": _format_network_speed(item.get("Speed")),
+            "service": _first(item.get("ServiceName")),
         }
         adapters.append({key: val for key, val in adapter.items() if val not in (None, "", [])})
     return _dedupe_dicts(adapters)
@@ -1090,16 +1550,19 @@ def _input_summaries(value: Any) -> list[dict[str, Any]]:
     return _dedupe_dicts(devices)
 
 
-def _security_summary(value: Any) -> dict[str, Any]:
+def _security_summary(value: Any, firmware: Any = None) -> dict[str, Any]:
     if isinstance(value, list):
         value = value[0] if value else {}
     if not isinstance(value, dict):
         return {}
+    if not isinstance(firmware, dict):
+        firmware = {}
     summary = {
         "tpm_present": value.get("TpmPresent"),
         "tpm_ready": value.get("TpmReady"),
         "tpm_spec_version": _first(value.get("SpecVersion")),
         "tpm_manufacturer_version": _first(value.get("ManufacturerVersion")),
+        "secure_boot": firmware.get("SecureBoot"),
     }
     return {key: val for key, val in summary.items() if val not in (None, "", [])}
 
@@ -1160,6 +1623,298 @@ def _dedupe_dicts(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
+def _driver_summaries(value: Any, limit: int = 40) -> list[dict[str, Any]]:
+    if isinstance(value, dict):
+        value = [value]
+    if not isinstance(value, list):
+        return []
+    drivers: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        driver = {
+            "device": _first(item.get("DeviceName")),
+            "class": _first(item.get("DeviceClass")),
+            "manufacturer": _first(item.get("Manufacturer")),
+            "provider": _first(item.get("DriverProviderName")),
+            "driver_version": _first(item.get("DriverVersion")),
+            "hardware_ids": _clean_hardware_ids(item.get("HardwareID")),
+            "compatible_ids": _clean_hardware_ids(item.get("CompatibleID")),
+        }
+        clean = {key: val for key, val in driver.items() if val not in (None, "", [])}
+        if clean:
+            drivers.append(clean)
+        if len(drivers) >= limit:
+            break
+    return _dedupe_dicts(drivers)
+
+
+def _driver_lookup(value: Any) -> list[dict[str, Any]]:
+    return _driver_summaries(value, limit=200)
+
+
+def _find_driver_for_name(drivers: list[dict[str, Any]], name: str | None) -> dict[str, Any] | None:
+    if not name:
+        return None
+    normalized_name = _normalize_device_name(name)
+    for driver in drivers:
+        device = _normalize_device_name(str(driver.get("device") or ""))
+        if device and (device in normalized_name or normalized_name in device):
+            return driver
+    return None
+
+
+def _clean_hardware_ids(value: Any, limit: int = 3) -> str | None:
+    if isinstance(value, str):
+        values = [value]
+    elif isinstance(value, list):
+        values = value
+    else:
+        return None
+    cleaned: list[str] = []
+    for item in values:
+        text = _first(item)
+        if not text:
+            continue
+        text = re.sub(r"(?i)\\[0-9a-f&]{8,}.*$", "", text)
+        text = text.replace("\\", " ")
+        if text and text not in cleaned:
+            cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return "; ".join(cleaned) if cleaned else None
+
+
+def _power_capability_summary(value: Any) -> str | None:
+    text = _first(value)
+    if not text:
+        return None
+    interesting = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if (
+            "standby" in line.lower()
+            or "hibernate" in line.lower()
+            or "fast startup" in line.lower()
+            or "available" in line.lower()
+        ):
+            interesting.append(line)
+        if len(interesting) >= 8:
+            break
+    return "; ".join(interesting) if interesting else text[:400]
+
+
+def _windows_evidence_crosscheck(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    cs = raw.get("ComputerSystem") or {}
+    csp = raw.get("ComputerSystemProduct") or {}
+    registry_bios = raw.get("WindowsRegistryBIOS") or {}
+    bios = raw.get("BIOS") or {}
+    cpu = raw.get("Processor") or {}
+    registry_cpu = raw.get("WindowsRegistryCPU") or {}
+    computer_info = raw.get("WindowsComputerInfo") or {}
+
+    rows = [
+        {
+            "field": "manufacturer",
+            "values": _join_unique(
+                csp.get("Vendor"), cs.get("Manufacturer"), registry_bios.get("SystemManufacturer"), computer_info.get("CsManufacturer")
+            ),
+            "sources": "ComputerSystemProduct, ComputerSystem, Registry BIOS, Get-ComputerInfo",
+        },
+        {
+            "field": "model",
+            "values": _join_unique(
+                csp.get("Name"), cs.get("Model"), registry_bios.get("SystemProductName"), computer_info.get("CsModel")
+            ),
+            "sources": "ComputerSystemProduct, ComputerSystem, Registry BIOS, Get-ComputerInfo",
+        },
+        {
+            "field": "sku/version",
+            "values": _join_unique(csp.get("SKUNumber"), csp.get("Version"), registry_bios.get("SystemSKU")),
+            "sources": "ComputerSystemProduct, Registry BIOS",
+        },
+        {
+            "field": "bios",
+            "values": _join_unique(bios.get("SMBIOSBIOSVersion"), bios.get("Version"), registry_bios.get("BIOSVersion")),
+            "sources": "Win32_BIOS, Registry BIOS",
+        },
+        {
+            "field": "cpu",
+            "values": _join_unique(cpu.get("Name"), registry_cpu.get("ProcessorNameString")),
+            "sources": "Win32_Processor, Registry CPU",
+        },
+    ]
+    return [row for row in rows if row.get("values")]
+
+
+def _macos_evidence_crosscheck(raw: dict[str, Any]) -> list[dict[str, Any]]:
+    hardware_items = raw.get("SPHardwareDataType") or []
+    hardware = hardware_items[0] if isinstance(hardware_items, list) and hardware_items else {}
+    rows = [
+        {
+            "field": "model",
+            "values": _join_unique(hardware.get("machine_name"), hardware.get("model_name")),
+            "sources": "system_profiler SPHardwareDataType",
+        },
+        {
+            "field": "model identifier",
+            "values": _join_unique(hardware.get("machine_model"), raw.get("hw_model"), raw.get("hw_machine")),
+            "sources": "system_profiler, sysctl hw.model/hw.machine",
+        },
+        {
+            "field": "cpu/chip",
+            "values": _join_unique(hardware.get("chip_type"), raw.get("cpu_brand_string")),
+            "sources": "system_profiler, sysctl machdep.cpu.brand_string",
+        },
+        {
+            "field": "memory",
+            "values": _join_unique(hardware.get("physical_memory"), _format_bytes(raw.get("hw_memsize"))),
+            "sources": "system_profiler, sysctl hw.memsize",
+        },
+    ]
+    return [row for row in rows if row.get("values")]
+
+
+def _join_unique(*values: Any) -> str:
+    cleaned: list[str] = []
+    for value in values:
+        text = _first(value)
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return " | ".join(cleaned)
+
+
+def _normalize_device_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _memory_form_factor_name(value: Any) -> str | None:
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return _first(value)
+    names = {
+        8: "DIMM",
+        12: "SODIMM",
+        13: "SRIMM",
+        16: "FB-DIMM",
+        17: "Die",
+        18: "TSOP",
+        19: "Row of chips",
+        20: "RIMM",
+        21: "SODIMM",
+        22: "SRIMM",
+        23: "FB-DIMM",
+    }
+    return names.get(code, f"Form factor {code}")
+
+
+def _memory_type_name(*values: Any) -> str | None:
+    for value in values:
+        try:
+            code = int(value)
+        except (TypeError, ValueError):
+            cleaned = _first(value)
+            if cleaned:
+                return cleaned
+            continue
+        names = {
+            20: "DDR",
+            21: "DDR2",
+            24: "DDR3",
+            26: "DDR4",
+            30: "LPDDR4",
+            34: "DDR5",
+            35: "LPDDR5",
+            36: "LPDDR5X",
+        }
+        if code in names:
+            return names[code]
+    return None
+
+
+def _battery_chemistry_name(value: Any) -> str | None:
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return _first(value)
+    names = {
+        1: "Other",
+        2: "Unknown",
+        3: "Lead Acid",
+        4: "Nickel Cadmium",
+        5: "Nickel Metal Hydride",
+        6: "Lithium-ion",
+        7: "Zinc air",
+        8: "Lithium Polymer",
+    }
+    return names.get(code, f"Chemistry {code}")
+
+
+def _battery_status_name(value: Any) -> str | None:
+    try:
+        code = int(value)
+    except (TypeError, ValueError):
+        return _first(value)
+    names = {
+        1: "Discharging",
+        2: "AC connected",
+        3: "Fully charged",
+        4: "Low",
+        5: "Critical",
+        6: "Charging",
+        7: "Charging and high",
+        8: "Charging and low",
+        9: "Charging and critical",
+        10: "Undefined",
+        11: "Partially charged",
+    }
+    return names.get(code, f"Battery status {code}")
+
+
+def _format_millivolts(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number <= 0:
+        return None
+    return f"{number / 1000:g} V"
+
+
+def _format_percent(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0:
+        return None
+    return f"{number}%"
+
+
+def _format_minutes(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    if number < 0 or number >= 71582788:
+        return None
+    hours, minutes = divmod(number, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def _format_hz(value: Any) -> str | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return f"{number} Hz" if number > 0 else None
+
+
 def _format_speed_mhz(value: Any) -> str | None:
     try:
         number = int(value)
@@ -1182,12 +1937,15 @@ def _format_network_speed(value: Any) -> str | None:
     return f"{number} bps"
 
 
-def _format_windows_os(value: dict[str, Any]) -> str | None:
+def _format_windows_os(value: dict[str, Any], computer_info: Any = None) -> str | None:
+    if not isinstance(computer_info, dict):
+        computer_info = {}
     product = _first(value.get("ProductName"), value.get("EditionID"))
-    version = _first(value.get("DisplayVersion"))
+    version = _first(value.get("DisplayVersion"), computer_info.get("WindowsVersion"))
     build = _first(value.get("CurrentBuild"))
     ubr = _first(value.get("UBR"))
-    pieces = [piece for piece in (product, version, f"build {build}.{ubr}" if build and ubr else None) if piece]
+    hal = _first(computer_info.get("OsHardwareAbstractionLayer"))
+    pieces = [piece for piece in (product, version, f"build {build}.{ubr}" if build and ubr else None, hal) if piece]
     return " ".join(pieces) if pieces else None
 
 

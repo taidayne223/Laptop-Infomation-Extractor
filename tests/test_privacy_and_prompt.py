@@ -18,13 +18,18 @@ class PrivacyAndPromptTests(unittest.TestCase):
             "MAC Address": "AA:BB:CC:DD:EE:FF",
             "IPv4 Addresses": ["192.168.1.22"],
             "Current Network": "Alice Home Wi-Fi",
+            "provisioning_UDID": "00006041-0012692136E2801C",
+            "switch_uid_key": "0x80874E5B5C620D00",
+            "iPhone của Alice": {"device_address": "AA:AA:AA:AA:AA:AA"},
             "note": (
                 "/Users/alice/Desktop/report.json "
                 r"C:\Users\bob\Desktop\file.txt "
                 "123e4567-e89b-12d3-a456-426614174000 "
                 "me@example.com "
                 "10.0.0.5 "
-                "11-22-33-44-55-66"
+                "11-22-33-44-55-66 "
+                "iPhone của Alice Microphone "
+                "Bob's iPad"
             ),
         }
 
@@ -39,6 +44,10 @@ class PrivacyAndPromptTests(unittest.TestCase):
         self.assertNotIn("AA:BB:CC:DD:EE:FF", rendered)
         self.assertNotIn("192.168.1.22", rendered)
         self.assertNotIn("Alice Home Wi-Fi", rendered)
+        self.assertNotIn("0012692136E2801C", rendered)
+        self.assertNotIn("80874E5B5C620D00", rendered)
+        self.assertNotIn("iPhone của Alice", rendered)
+        self.assertNotIn("Bob's iPad", rendered)
         self.assertIn("[REDACTED]", rendered)
         self.assertIn("[REDACTED_EMAIL]", rendered)
         self.assertIn("[REDACTED_IP]", rendered)

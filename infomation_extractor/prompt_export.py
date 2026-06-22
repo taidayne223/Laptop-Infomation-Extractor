@@ -192,20 +192,27 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
         ("Product/model code", summary.get("system_model")),
         ("System SKU/version", summary.get("system_sku")),
         ("Baseboard", summary.get("baseboard")),
+        ("Chassis / form factor", summary.get("chassis")),
         ("BIOS version", summary.get("bios_version")),
+        ("Firmware", summary.get("firmware")),
         ("CPU", summary.get("cpu")),
         ("Confirmed GPU variant", confirmed.get("gpu")),
         ("Detected GPU list", join_values(summary.get("gpu"))),
+        ("GPU details", summarize_dict_list(summary.get("gpu_details"))),
         ("RAM", summary.get("memory")),
+        ("RAM layout", summary.get("memory_layout")),
         ("RAM modules", summarize_dict_list(summary.get("memory_modules"))),
         ("Storage devices", join_values(summary.get("storage"))),
+        ("Storage details", summarize_dict_list(summary.get("storage_details"))),
         ("Network / Wi-Fi", summarize_dict_list(summary.get("network"))),
         ("Bluetooth", summarize_dict_list(summary.get("bluetooth"))),
         ("Audio", summarize_dict_list(summary.get("audio"))),
         ("Camera / webcam", summarize_dict_list(summary.get("camera"))),
         ("Input devices", summarize_dict_list(summary.get("input"))),
+        ("Biometric / sensors", summarize_dict_list(summary.get("biometric_or_sensors"))),
         ("Security", summarize_dict(summary.get("security"))),
         ("Ports / controllers", summarize_dict_list(summary.get("ports_or_controllers"))),
+        ("Power capabilities", summary.get("power_capabilities")),
         ("Display / panel", summarize_dict_list(summary.get("display"))),
         ("Battery", summarize_dict_list(summary.get("battery"))),
         ("Operating system", summary.get("os")),
@@ -231,6 +238,44 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 )
             )
 
+    gpu_details = summary.get("gpu_details") or []
+    if gpu_details:
+        append_dict_table(
+            lines,
+            "Local GPU Details",
+            gpu_details,
+            [
+                ("Name", "name"),
+                ("Video processor", "video_processor"),
+                ("Adapter RAM", "adapter_ram"),
+                ("Driver", "driver_version"),
+                ("Current resolution", "current_resolution"),
+                ("Refresh", "refresh"),
+                ("Hardware IDs", "hardware_ids"),
+                ("Status", "status"),
+            ],
+        )
+
+    storage_details = summary.get("storage_details") or []
+    if storage_details:
+        append_dict_table(
+            lines,
+            "Local Storage Details",
+            storage_details,
+            [
+                ("Model", "model"),
+                ("Name", "name"),
+                ("Size", "size"),
+                ("Media", "media_type"),
+                ("Bus/protocol", "bus_type"),
+                ("Protocol", "protocol"),
+                ("Firmware", "firmware"),
+                ("Health", "health"),
+                ("Status", "status"),
+                ("Source", "source"),
+            ],
+        )
+
     displays = summary.get("display") or []
     if displays:
         append_dict_table(
@@ -248,6 +293,8 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 ("Active refresh", "active_refresh_rate"),
                 ("Display Type", "display_type"),
                 ("Main", "main"),
+                ("WMI name", "wmi_name"),
+                ("WMI product", "wmi_product_code"),
                 ("Registry hint", "registry_hint"),
             ],
         )
@@ -264,6 +311,9 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 ("Speed", "speed"),
                 ("Configured speed", "configured_speed"),
                 ("Part number", "part_number"),
+                ("Slot", "slot"),
+                ("Form factor", "form_factor"),
+                ("Type", "memory_type"),
             ],
         )
 
@@ -281,6 +331,11 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 ("Full charge/Max capacity", "full_charge_capacity"),
                 ("Cycle count", "cycle_count"),
                 ("Health / State", "health"),
+                ("Max capacity", "maximum_capacity"),
+                ("Charge remaining", "charge_remaining"),
+                ("Charging", "charging"),
+                ("Voltage", "design_voltage"),
+                ("Status", "battery_status"),
                 ("Est. Active Runtime (Design)", "estimated_active_runtime_design"),
                 ("Est. Active Runtime (Full)", "estimated_active_runtime_full_charge"),
                 ("Charger Wattage", "charger_wattage"),
@@ -296,6 +351,7 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
                 ("Manufacturer", "manufacturer"),
                 ("Type", "type"),
                 ("Speed", "speed"),
+                ("Service", "service"),
                 ("Hardware", "hardware"),
                 ("Interface", "interface"),
             ],
@@ -357,6 +413,49 @@ def build_clean_snapshot(system_info: dict[str, Any]) -> str:
         rows = summary.get(key) or []
         if rows:
             append_dict_table(lines, heading, rows, columns)
+
+    rows = summary.get("biometric_or_sensors") or []
+    if rows:
+        append_dict_table(
+            lines,
+            "Local Biometric / Sensors",
+            rows,
+            [
+                ("Name", "name"),
+                ("Manufacturer", "manufacturer"),
+                ("Status", "status"),
+                ("Class", "class"),
+            ],
+        )
+
+    rows = summary.get("device_drivers") or []
+    if rows:
+        append_dict_table(
+            lines,
+            "Local Driver Evidence",
+            rows,
+            [
+                ("Device", "device"),
+                ("Class", "class"),
+                ("Manufacturer", "manufacturer"),
+                ("Provider", "provider"),
+                ("Version", "driver_version"),
+                ("Hardware IDs", "hardware_ids"),
+            ],
+        )
+
+    rows = summary.get("local_evidence_crosscheck") or []
+    if rows:
+        append_dict_table(
+            lines,
+            "Local Evidence Cross-Check",
+            rows,
+            [
+                ("Field", "field"),
+                ("Values found", "values"),
+                ("Sources", "sources"),
+            ],
+        )
 
     return "\n".join(lines)
 
